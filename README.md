@@ -4,7 +4,195 @@
 
 --- 
 
-# 🚀 Vision 
+# 📋 Current Status (What We've Done)
+
+We've built the core foundational features of EVOLVE AI! Here's everything we've accomplished step by step:
+
+---
+
+# 🏗️ Step 1: Project Setup & Initial Configuration
+
+## ✅ Backend Setup
+- Created [backend/](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/) directory with Python 3.12
+- Configured virtual environment ([backend/.venv/](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/.venv/))
+- Set up [requirements.txt](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/requirements.txt) with all necessary dependencies
+- Configured [.env](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/.env) for Gemini API key and environment variables
+
+## ✅ Frontend Setup
+- Created [frontend/](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/) directory with Next.js 15+
+- Set up React + TypeScript + Tailwind CSS
+- Configured [package.json](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/package.json) with dependencies
+- Added Framer Motion for animations
+
+## ✅ Gitignore Configuration
+- Updated [.gitignore](file:///c:/Users/Lenovo/Desktop/MemoryOS/.gitignore) to ignore temporary files (venv, chroma_db, uploads, .next, etc.)
+
+---
+
+# 🔧 Step 2: Backend Core Development
+
+## ✅ FastAPI Application
+- [backend/app/main.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/main.py): Main FastAPI app with CORS middleware
+  - Allowed origins for localhost ports 3000, 3001, and 3002
+  - Registered all routers (documents, chat, memory graph)
+
+## ✅ Document Processing Pipeline
+- [backend/app/services/pdf_parser.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/pdf_parser.py): PDF file parsing using PyMuPDF
+- [backend/app/services/chunker.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/chunker.py): Text chunking (splits large docs into 1000-token chunks)
+- [backend/app/services/embeddings.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/embeddings.py): Embedding generation using sentence-transformers/all-MiniLM-L6-v2
+- [backend/app/services/vector_store.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/vector_store.py): ChromaDB integration for vector storage and search
+
+## ✅ RAG (Retrieval-Augmented Generation) Engine
+- [backend/app/services/rag_engine.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/rag_engine.py): RAG implementation
+  - **Fixed timeout issue**: Increased Gemini API timeout to 2 minutes (120 seconds)
+  - Uses Google Gemini API for LLM responses
+  - Combines retrieved context from vector store
+  - Provides source citations and confidence scores
+
+## ✅ Backend Routers
+1. **[backend/app/routers/documents.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/routers/documents.py)**:
+   - Upload PDF files
+   - List all uploaded documents
+   - Delete documents
+2. **[backend/app/routers/chat.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/routers/chat.py)**:
+   - Chat with your documents using RAG
+3. **[backend/app/routers/memory_graph.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/routers/memory_graph.py)**:
+   - Generate dynamic memory graph data
+   - Connects user node with all uploaded documents
+
+---
+
+# 🎨 Step 3: Frontend UI Development
+
+## ✅ Layout & Navigation
+- [frontend/src/components/layout/AppLayout.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/components/layout/AppLayout.tsx): Main app layout with sidebar
+- [frontend/src/components/layout/Sidebar.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/components/layout/Sidebar.tsx): Sidebar navigation with links to all pages
+
+## ✅ Frontend Pages
+1. **[frontend/src/app/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/page.tsx)**: Home/Dashboard page
+2. **[frontend/src/app/ask/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/ask/page.tsx)**: AI Chat page (chat with your docs!)
+3. **[frontend/src/app/sources/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/sources/page.tsx)**: Sources/Uploads page
+4. **[frontend/src/app/memory-graph/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/memory-graph/page.tsx)**: Interactive memory graph visualization
+5. **[frontend/src/app/timeline/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/timeline/page.tsx)**: Timeline page (placeholder for now)
+6. **[frontend/src/app/files/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/files/page.tsx)**: Files page
+7. **[frontend/src/app/daily-summary/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/daily-summary/page.tsx)**: Daily summary page
+8. **[frontend/src/app/settings/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/settings/page.tsx)**: Settings page
+
+## ✅ Frontend API Client
+- [frontend/src/lib/api.ts](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/lib/api.ts): API client to communicate with backend
+  - **Fixed API calls**: Uses direct base URL `http://localhost:8000/api` instead of relative path
+
+---
+
+# 🛠️ Tech Stack We're Using
+
+| Category | Technology |
+|----------|------------|
+| **Backend Framework** | FastAPI |
+| **Backend Language** | Python 3.12 |
+| **Frontend Framework** | Next.js 15+ |
+| **Frontend Language** | TypeScript |
+| **Styling** | Tailwind CSS |
+| **Animations** | Framer Motion |
+| **LLM** | Google Gemini (via google-generativeai) |
+| **Embeddings** | sentence-transformers/all-MiniLM-L6-v2 |
+| **Vector Database** | ChromaDB |
+| **PDF Parsing** | PyMuPDF |
+| **Git Remote** | https://github.com/pv-tech28/MemoryOS.git |
+
+---
+
+# 🚀 How to Run the Application
+
+## Prerequisites
+1. Python 3.12 installed
+2. Node.js 18+ installed
+3. Gemini API key (get from https://aistudio.google.com/apikey)
+
+## Step 1: Set Up Backend
+```bash
+# Navigate to backend directory
+cd backend
+
+# Create virtual environment (if not already created)
+python -m venv .venv
+
+# Activate virtual environment (Windows)
+.venv\Scripts\activate
+
+# Install dependencies (if not already installed)
+pip install -r requirements.txt
+
+# Configure .env file with your Gemini API key
+# Make sure backend/.env has:
+# GEMINI_API_KEY=your_gemini_api_key_here
+
+# Run the FastAPI backend server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+Backend will be running at: http://localhost:8000
+
+## Step 2: Set Up Frontend
+```bash
+# Open a new terminal, navigate to frontend directory
+cd frontend
+
+# Install dependencies (if not already installed)
+npm install
+
+# Run Next.js dev server
+npm run dev
+```
+Frontend will be running at one of:
+- http://localhost:3000
+- http://localhost:3001
+- http://localhost:3002
+
+## Step 3: Use the App!
+1. Go to http://localhost:3002/ask
+2. Upload a PDF document (Sources page)
+3. Ask questions about your document in the chat!
+4. View your memory graph at http://localhost:3002/memory-graph
+
+---
+
+# 📌 Remaining Tasks (What's Next)
+
+Here's everything still left to implement to complete EVOLVE AI:
+
+## Phase 1: Core Enhancements (High Priority)
+- [ ] **Authentication System**: User login/signup (Google OAuth initially)
+- [ ] **Proper Database**: Replace file-based metadata storage with PostgreSQL
+- [ ] **Persistence**: Make sure data (uploads, vector DB) persists across server restarts properly
+- [ ] **Timeline Page**: Implement actual timeline view of document uploads and events
+- [ ] **Daily Summary Page**: Generate daily AI summaries of your activity
+
+## Phase 2: Source Integrations (Medium Priority)
+- [ ] **Gmail Integration**: Connect Gmail to import emails
+- [ ] **Google Drive Integration**: Connect Drive to import files
+- [ ] **Google Calendar Integration**: Connect Calendar to import events
+- [ ] **GitHub Integration**: Connect GitHub to import commits and repos
+- [ ] **WhatsApp Backup Import**: Import WhatsApp chat backups
+- [ ] **Image Uploads + OCR**: Upload images and extract text with OCR
+- [ ] **Audio Uploads + Speech Recognition**: Upload audio files and transcribe with Whisper
+
+## Phase 3: Advanced Features (High Priority)
+- [ ] **Full Knowledge Graph**: Build true knowledge graph with relationships (using Neo4j instead of simple node-edge)
+- [ ] **Multi-source Search**: Search across all connected sources at once
+- [ ] **Better UI/UX**: Improve design, add loading states, error messages
+- [ ] **Proper Error Handling**: Handle API errors, timeout errors, file errors gracefully
+- [ ] **Progress Bars**: Show upload/processing progress
+
+## Phase 4: Production & Deployment (Low Priority)
+- [ ] **Dockerize Application**: Create Docker containers for easy deployment
+- [ ] **Deploy to Cloud**: Deploy backend (e.g., Vercel, AWS, GCP) and frontend (Vercel)
+- [ ] **Production Vector DB**: Replace ChromaDB with Pinecone or Qdrant in production
+- [ ] **Analytics Dashboard**: Add usage analytics and insights
+- [ ] **Mobile Responsive**: Make sure app works perfectly on mobile devices
+
+---
+
+# 🚀 Vision (Original)
 
 EVOLVE AI is an AI-powered Digital Memory Operating System that connects scattered information across multiple platforms into one intelligent memory. 
 
@@ -16,7 +204,7 @@ Think of it as your personal AI memory.
 
 --- 
 
-# ❌ The Problem 
+# ❌ The Problem (Original)
 
 Today's information is fragmented. 
 
@@ -38,39 +226,9 @@ The information isn't lost.
 
 It's disconnected. 
 
-When someone asks: 
+---
 
-> "When did we first discuss this startup idea?" 
-
-or 
-
-> "Who suggested adding AI into our project?" 
-
-or 
-
-> "Show every document related to SilentGuard." 
-
-Today's search systems force users to manually search through multiple applications. 
-
-Current search engines only match keywords. 
-
-They don't understand context. 
-
---- 
-
-# ✅ Our Solution 
-
-EVOLVE AI builds an intelligent memory layer over all connected platforms. 
-
-Instead of storing files... 
-
-It understands your life. 
-
-The system collects information from every connected source, converts it into AI-readable knowledge, connects relationships between people, meetings, emails, documents, code, and tasks, and generates evidence-backed responses. 
-
---- 
-
-# 🎯 Goals 
+# 🎯 Goals (Original)
 
 - Build an AI-powered Memory Operating System 
 - Connect multiple digital platforms 
@@ -79,606 +237,9 @@ The system collects information from every connected source, converts it into AI
 - Generate trustworthy answers 
 - Provide complete references with every response 
 
---- 
+---
 
-# 🏗️ System Workflow 
-
-``` 
-User 
-    │ 
-    ▼ 
-Login / Sign Up 
-    │ 
-    ▼ 
-Connect Data Sources 
-    │ 
-    ▼ 
-Collect Data 
-    │ 
-    ▼ 
-AI Processing 
-    │ 
-    ▼ 
-Embeddings 
-    │ 
-    ▼ 
-Vector Database 
-    │ 
-    ▼ 
-Knowledge Graph 
-    │ 
-    ▼ 
-RAG Engine 
-    │ 
-    ▼ 
-LLM 
-    │ 
-    ▼ 
-Verified Answer 
-``` 
-
---- 
-
-# 🌐 Data Sources 
-
-The user can connect: 
-
-- Gmail 
-- Google Drive 
-- Google Calendar 
-- GitHub 
-- Notion 
-- OneNote 
-- WhatsApp Backup 
-- PDFs 
-- Images 
-- Voice Recordings 
-- Local Files 
-
---- 
-
-# 📥 Data Collection Layer 
-
-Purpose: 
-
-Collect information from every connected source. 
-
-Responsibilities: 
-
-- Google API Integration 
-- Gmail API 
-- Drive API 
-- Calendar API 
-- GitHub API 
-- File Uploads 
-- Local Folder Upload 
-- WhatsApp Backup Import 
-
-Output: 
-
-Raw Documents 
-
---- 
-
-# 🧠 AI Data Processing Layer 
-
-Every collected file passes through an AI processing pipeline. 
-
---- 
-
-## 1. Document Parsing 
-
-Supported Formats 
-
-- PDF 
-- DOCX 
-- TXT 
-- Markdown 
-- CSV 
-
-Libraries 
-
-- PyMuPDF 
-- pdfplumber 
-
---- 
-
-## 2. Email Parsing 
-
-Extract 
-
-- Sender 
-- Receiver 
-- Subject 
-- Body 
-- Attachments 
-- Date 
-
---- 
-
-## 3. OCR 
-
-Images → 
-
-Text 
-
-Libraries 
-
-- EasyOCR 
-- Google Vision OCR 
-
---- 
-
-## 4. Speech Recognition 
-
-Audio → 
-
-Text 
-
-Library 
-
-- OpenAI Whisper 
-
---- 
-
-## 5. Metadata Extraction 
-
-Extract 
-
-- File Name 
-- Source 
-- Date 
-- Owner 
-- Tags 
-- Location 
-- Created Time 
-- Modified Time 
-
---- 
-
-## 6. Text Cleaning 
-
-Remove 
-
-- HTML 
-- Extra Spaces 
-- Duplicate Text 
-- Invalid Characters 
-
---- 
-
-## 7. Chunking 
-
-Large documents are divided into smaller chunks. 
-
-Example 
-
-100-page PDF 
-
-↓ 
-
-700 chunks 
-
-↓ 
-
-Ready for embeddings 
-
---- 
-
-# 🔍 Embedding Generation 
-
-Every chunk is converted into an embedding vector. 
-
-Purpose 
-
-Semantic Search 
-
-Instead of keyword matching 
-
-AI understands meaning. 
-
-Embedding Models 
-
-- BAAI BGE-M3 
-- OpenAI text-embedding-3-large 
-
---- 
-
-# 🗄️ Vector Database 
-
-Embeddings are stored inside 
-
-Development 
-
-- ChromaDB 
-
-Production 
-
-- Pinecone 
-
-Alternative 
-
-- Qdrant 
-
-Purpose 
-
-Fast semantic retrieval. 
-
---- 
-
-# �️ Knowledge Graph 
-
-This is the core innovation. 
-
-Instead of storing isolated documents, 
-
-EVOLVE AI builds relationships. 
-
-Example 
-
-Siddh 
-
-↓ 
-
-Created 
-
-↓ 
-
-SilentGuard 
-
-↓ 
-
-Hackathon 
-
-↓ 
-
-Professor 
-
-↓ 
-
-Meeting 
-
-↓ 
-
-GitHub Commit 
-
-↓ 
-
-Presentation 
-
-The AI understands relationships between 
-
-- People 
-- Projects 
-- Meetings 
-- Emails 
-- Documents 
-- Tasks 
-- Repositories 
-- Notes 
-
-Database 
-
-Neo4j 
-
---- 
-
-# ⚡ AI Memory Engine 
-
-Uses 
-
-Retrieval Augmented Generation (RAG) 
-
-Workflow 
-
-User Question 
-
-↓ 
-
-Semantic Search 
-
-↓ 
-
-Retrieve Relevant Chunks 
-
-↓ 
-
-Knowledge Graph Lookup 
-
-↓ 
-
-Context Building 
-
-↓ 
-
-LLM 
-
-↓ 
-
-Verified Answer 
-
---- 
-
-# 🤖 Large Language Model 
-
-Supported 
-
-- Gemini 2.5 Pro (Primary) 
-- GPT-5.5 (Development) 
-
-Responsibilities 
-
-- Reasoning 
-- Context Understanding 
-- Answer Generation 
-- Timeline Generation 
-- Memory Recall 
-
---- 
-
-# 📤 Final Output 
-
-Instead of returning only an answer, 
-
-EVOLVE AI also returns evidence. 
-
-Example 
-
-Answer 
-
-Supporting Documents 
-
-Related Emails 
-
-Meeting Dates 
-
-GitHub Commits 
-
-Timeline 
-
-References 
-
-Confidence Score 
-
---- 
-
-# 🖥️ Frontend 
-
-- Next.js 
-- React 
-- Tailwind CSS 
-- Shadcn UI 
-- Framer Motion 
-
-Pages 
-
-- Landing Page 
-- Dashboard 
-- AI Chat 
-- Connected Sources 
-- Timeline 
-- Memory Explorer 
-- Settings 
-
---- 
-
-# ⚙️ Backend 
-
-- FastAPI 
-- Python 
-
-Responsibilities 
-
-- Authentication 
-- API Integrations 
-- AI Processing 
-- RAG Pipeline 
-- Background Jobs 
-
---- 
-
-# 🗄️ Database 
-
-PostgreSQL 
-
-Stores 
-
-- Users 
-- Metadata 
-- Settings 
-- Source Information 
-- Authentication 
-
---- 
-
-# ☁️ Storage 
-
-Supabase Storage 
-
-Stores 
-
-- Uploaded Files 
-- Images 
-- Audio 
-- PDFs 
-
---- 
-
-# 🔐 Authentication 
-
-Google OAuth 
-
-Future 
-
-- Microsoft 
-- GitHub 
-- Email Login 
-
---- 
-
-# 🛠️ AI Stack 
-
-LLM 
-
-Gemini 2.5 Pro 
-
-Framework 
-
-LangChain 
-
-RAG 
-
-LlamaIndex 
-
-Embeddings 
-
-BGE-M3 
-
-OCR 
-
-EasyOCR 
-
-Speech 
-
-Whisper 
-
-Vector DB 
-
-ChromaDB 
-
-Knowledge Graph 
-
-Neo4j 
-
-Backend 
-
-FastAPI 
-
-Frontend 
-
-Next.js 
-
---- 
-
-# 📂 Folder Structure 
-
-``` 
-EVOLVE-AI/ 
-│ 
-├── frontend/ 
-│ 
-├── backend/ 
-│ 
-├── ai-engine/ 
-│ 
-├── embeddings/ 
-│ 
-├── rag/ 
-│ 
-├── graph/ 
-│ 
-├── parsers/ 
-│ 
-├── api/ 
-│ 
-├── database/ 
-│ 
-├── storage/ 
-│ 
-├── workers/ 
-│ 
-├── docs/ 
-│ 
-└── README.md 
-``` 
-
---- 
-
-# 📅 Development Roadmap 
-
-## Phase 1 
-
-- Project Setup 
-- Authentication 
-- Landing Page 
-- Dashboard 
-
---- 
-
-## Phase 2 
-
-- PDF Upload 
-- Chat with PDF 
-- RAG Pipeline 
-
---- 
-
-## Phase 3 
-
-- Gmail Integration 
-- Drive Integration 
-- Calendar Integration 
-
---- 
-
-## Phase 4 
-
-- OCR 
-- Audio Transcription 
-- Metadata Extraction 
-
---- 
-
-## Phase 5 
-
-- Embeddings 
-- ChromaDB 
-- Semantic Search 
-
---- 
-
-## Phase 6 
-
-- Knowledge Graph 
-- Timeline 
-- Relationship Builder 
-
---- 
-
-## Phase 7 
-
-- AI Memory Engine 
-- Multi-source Search 
-- Verified Responses 
-
---- 
-
-## Phase 8 
-
-- Beautiful UI 
-- Analytics 
-- Deployment 
-- Demo Video 
-
---- 
-
-# 🌟 Future Features 
-
-- AI Agents 
-- Daily Memory Summary 
-- Meeting Summaries 
-- Smart Notifications 
-- Automatic Knowledge Graph Updates 
-- Chrome Extension 
-- Mobile App 
-- Offline AI Memory 
-- Voice Assistant 
-- Memory Timeline 
-- AI Recommendations 
-
---- 
-
-# 💡 Example Questions 
+# 💡 Example Questions (Original)
 
 > When did we first discuss SilentGuard? 
 
@@ -694,9 +255,9 @@ EVOLVE-AI/
 
 > What changed after our last meeting? 
 
---- 
+---
 
-# 🎯 Target Users 
+# 🎯 Target Users (Original)
 
 - Students 
 - Researchers 
@@ -706,9 +267,9 @@ EVOLVE-AI/
 - Professionals 
 - Content Creators 
 
---- 
+---
 
-# ❤️ Why EVOLVE AI? 
+# ❤️ Why EVOLVE AI?
 
 Search engines find files. 
 
@@ -716,4 +277,4 @@ EVOLVE AI remembers your life.
 
 It connects memories, understands context, builds relationships, and helps you retrieve information exactly when you need it. 
 
-**Your Second Brain That Never Forgets.
+**Your Second Brain That Never Forgets.**
