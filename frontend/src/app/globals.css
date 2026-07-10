@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #080810;
+  --bg-secondary: #0c0c1d;
+  --bg-sidebar: #0a0a18;
+  --bg-card: #111128;
+  --bg-card-hover: #16163a;
+  --bg-input: #0e0e24;
+  --bg-elevated: #1a1a40;
+
+  --accent: #6c5ce7;
+  --accent-hover: #7c6ff7;
+  --accent-glow: rgba(108, 92, 231, 0.3);
+  --accent-subtle: rgba(108, 92, 231, 0.12);
+
+  --green: #00d68f;
+  --green-subtle: rgba(0, 214, 143, 0.12);
+  --orange: #f0a500;
+  --orange-subtle: rgba(240, 165, 0, 0.12);
+  --red: #ff6b6b;
+  --pink: #e84393;
+  --cyan: #00cec9;
+  --blue: #4facfe;
+
+  --text-primary: #ffffff;
+  --text-secondary: #8888aa;
+  --text-muted: #555577;
+
+  --border: #1a1a3e;
+  --border-subtle: #14142e;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px rgba(108, 92, 231, 0.15);
+}
+
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-inter);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(17, 17, 40, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+}
+
+/* Glow effect for accent elements */
+.glow-accent {
+  box-shadow: 0 0 20px rgba(108, 92, 231, 0.2), 0 0 40px rgba(108, 92, 231, 0.1);
+}
+
+/* Card base */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all 0.2s ease;
+}
+.card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(108, 92, 231, 0.3);
+}
+
+/* Badge styles */
+.badge-connected {
+  background: var(--green-subtle);
+  color: var(--green);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge-not-connected {
+  background: var(--orange-subtle);
+  color: var(--orange);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe, #74b9ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Pulse animation for connected indicators */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.pulse-green {
+  animation: pulse-green 2s ease-in-out infinite;
+}
+
+/* Subtle float animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
