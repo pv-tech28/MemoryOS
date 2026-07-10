@@ -1,0 +1,10 @@
+# Backend temporary files
+backend/
+test_document.pdf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node modules (though frontend has its own)
+node_modules
