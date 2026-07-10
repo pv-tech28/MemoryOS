@@ -225,49 +225,49 @@ export default function UploadPage() {
 
               {(uploadStatus === "uploading" ||
                 uploadStatus === "processing") && (
-                <motion.div
-                  key="uploading"
-                  className="flex flex-col items-center gap-4 w-full max-w-md"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <Loader2
-                    size={32}
-                    className="animate-spin"
-                    style={{ color: "var(--accent)" }}
-                  />
-                  <p className="text-sm font-medium text-white">
-                    {uploadMessage}
-                  </p>
-                  {/* Progress Bar */}
-                  <div
-                    className="w-full h-2 rounded-full overflow-hidden"
-                    style={{ background: "var(--bg-elevated)" }}
+                  <motion.div
+                    key="uploading"
+                    className="flex flex-col items-center gap-4 w-full max-w-md"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
                   >
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: "var(--accent)" }}
-                      initial={{ width: 0 }}
-                      animate={{
-                        width:
-                          uploadStatus === "processing"
-                            ? "100%"
-                            : `${uploadProgress}%`,
-                      }}
-                      transition={{ duration: 0.3 }}
+                    <Loader2
+                      size={32}
+                      className="animate-spin"
+                      style={{ color: "var(--accent)" }}
                     />
-                  </div>
-                  <p
-                    className="text-[11px]"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {uploadStatus === "processing"
-                      ? "AI is analyzing your document..."
-                      : `${uploadProgress}% uploaded`}
-                  </p>
-                </motion.div>
-              )}
+                    <p className="text-sm font-medium text-white">
+                      {uploadMessage}
+                    </p>
+                    {/* Progress Bar */}
+                    <div
+                      className="w-full h-2 rounded-full overflow-hidden"
+                      style={{ background: "var(--bg-elevated)" }}
+                    >
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: "var(--accent)" }}
+                        initial={{ width: 0 }}
+                        animate={{
+                          width:
+                            uploadStatus === "processing"
+                              ? "100%"
+                              : `${uploadProgress}%`,
+                        }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </div>
+                    <p
+                      className="text-[11px]"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {uploadStatus === "processing"
+                        ? "AI is analyzing your document..."
+                        : `${uploadProgress}% uploaded`}
+                    </p>
+                  </motion.div>
+                )}
 
               {uploadStatus === "done" && (
                 <motion.div

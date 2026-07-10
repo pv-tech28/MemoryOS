@@ -1,10 +1,23 @@
 # Backend temporary files
-backend/
+backend/.venv/
+backend/chroma_db/
+backend/uploads/
+backend/model_cache/
+backend/.env
+backend/__pycache__/
+backend/**/__pycache__/
+backend/test*.py
+backend/debug*.py
+backend/test*.txt
+
 test_document.pdf
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Node modules (though frontend has its own)
+# Node modules
 node_modules
+frontend/node_modules
+frontend/.next
+

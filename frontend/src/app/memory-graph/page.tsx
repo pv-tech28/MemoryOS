@@ -14,33 +14,21 @@ import {
   MessageSquare,
   Calendar,
   Lightbulb,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { getMemoryGraph, type MemoryGraphData, type GraphNode as APIGraphNode, type GraphEdge as APIGraphEdge } from "@/lib/api";
 
 /* ──────────────── Graph Data ──────────────── */
 
-interface GraphNode {
-  id: string;
-  label: string;
-  category: string;
-  color: string;
-  radius: number;
+interface GraphNode extends APIGraphNode {
   x: number;
   y: number;
   vx: number;
   vy: number;
-  description?: string;
-  date?: string;
-  owner?: string;
-  type?: string;
-  connections?: string[];
 }
 
-interface GraphEdge {
-  source: string;
-  target: string;
-  label: string;
-}
+interface GraphEdge extends APIGraphEdge {}
 
 const categories: Record<string, string> = {
   Person: "#4facfe",
@@ -52,102 +40,13 @@ const categories: Record<string, string> = {
   Chat: "#25d366",
 };
 
-const initialNodes: Omit<GraphNode, "x" | "y" | "vx" | "vy">[] = [
-  {
-    id: "silentguard",
-    label: "SilentGuard\nProject",
-    category: "Project",
-    color: "#00d68f",
-    radius: 42,
-    description: "Emergency protection system for women security using AI.",
-    date: "10 Jan 2024",
-    owner: "Siddh Tyagi",
-    type: "Project",
-    connections: [
-      "Prof. Sharma",
-      "12 Jan 2024 Meeting",
-      "AI Integration Idea",
-      "GitHub Commit",
-      "Final Report (PDF)",
-    ],
-  },
-  {
-    id: "prof_sharma",
-    label: "Prof.\nSharma",
-    category: "Person",
-    color: "#4facfe",
-    radius: 32,
-    type: "Person",
-  },
-  {
-    id: "meeting_jan12",
-    label: "12 Jan 2024\nMeeting",
-    category: "Meeting",
-    color: "#f0a500",
-    radius: 30,
-    type: "Meeting",
-  },
-  {
-    id: "ai_idea",
-    label: "AI Integration\nIdea",
-    category: "Event",
-    color: "#6c5ce7",
-    radius: 28,
-    type: "Idea",
-  },
-  {
-    id: "github_commit",
-    label: "GitHub Commit\n13 Jan 2024",
-    category: "Code",
-    color: "#f0f0f0",
-    radius: 28,
-    type: "Commit",
-  },
-  {
-    id: "final_report",
-    label: "Final Report\n(PDF)",
-    category: "Document",
-    color: "#e84393",
-    radius: 28,
-    type: "Document",
-  },
-  {
-    id: "whatsapp_chat",
-    label: "WhatsApp Chat\n18 Jan 2024",
-    category: "Chat",
-    color: "#25d366",
-    radius: 26,
-    type: "Chat",
-  },
-  {
-    id: "gmail_thread",
-    label: "Gmail Thread\n18 Jan 2024",
-    category: "Document",
-    color: "#ea4335",
-    radius: 26,
-    type: "Email",
-  },
-];
-
-const edges: GraphEdge[] = [
-  { source: "silentguard", target: "prof_sharma", label: "Mentor" },
-  { source: "silentguard", target: "meeting_jan12", label: "Discussed" },
-  { source: "silentguard", target: "ai_idea", label: "Suggestion" },
-  { source: "silentguard", target: "github_commit", label: "Implemented" },
-  { source: "silentguard", target: "final_report", label: "Document" },
-  { source: "silentguard", target: "whatsapp_chat", label: "Discussion" },
-  { source: "silentguard", target: "gmail_thread", label: "Email" },
-  { source: "prof_sharma", target: "meeting_jan12", label: "Attended" },
-  { source: "ai_idea", target: "meeting_jan12", label: "Proposed at" },
-];
-
 /* ──────────────── Force Simulation ──────────────── */
 
-function initNodes(width: number, height: number): GraphNode[] {
+function initNodesFromAPI(apiNodes: APIGraphNode[], width: number, height: number): GraphNode[] {
   const cx = width / 2;
   const cy = height / 2;
-  return initialNodes.map((n, i) => {
-    const angle = (i / initialNodes.length) * Math.PI * 2;
+  return apiNodes.map((n, i) => {
+    const angle = (i / apiNodes.length) * Math.PI * 2;
     const dist = i === 0 ? 0 : 140 + Math.random() * 80;
     return {
       ...n,
@@ -232,8 +131,11 @@ const detailIcons: Record<string, React.ElementType> = {
 export default function MemoryGraphPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<GraphNode[]>([]);
+  const edgesRef = useRef<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [graphData, setGraphData] = useState<MemoryGraphData | null>(null);
+  const [loading, setLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const dragRef = useRef<{ node: GraphNode | null; offsetX: number; offsetY: number }>({
@@ -242,7 +144,7 @@ export default function MemoryGraphPage() {
     offsetY: 0,
   });
 
-  // Initialize
+  // Initialize size
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
@@ -255,11 +157,30 @@ export default function MemoryGraphPage() {
     return () => window.removeEventListener("resize", updateSize);
   }, []);
 
+  // Fetch graph data from backend
   useEffect(() => {
-    nodesRef.current = initNodes(dimensions.width, dimensions.height);
-    // Default select the central node
-    setSelectedNode(nodesRef.current[0]);
-  }, [dimensions]);
+    const fetchGraph = async () => {
+      try {
+        const data = await getMemoryGraph();
+        setGraphData(data);
+        edgesRef.current = data.edges;
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to fetch memory graph:", err);
+        setLoading(false);
+      }
+    };
+    fetchGraph();
+  }, []);
+
+  // Initialize nodes when dimensions or graph data change
+  useEffect(() => {
+    if (graphData && graphData.nodes.length > 0) {
+      nodesRef.current = initNodesFromAPI(graphData.nodes, dimensions.width, dimensions.height);
+      // Default select the central node (first node)
+      setSelectedNode(nodesRef.current[0]);
+    }
+  }, [dimensions, graphData]);
 
   // Draw loop
   const draw = useCallback(() => {
@@ -274,6 +195,8 @@ export default function MemoryGraphPage() {
     ctx.scale(dpr, dpr);
 
     const nodes = nodesRef.current;
+    const edges = edgesRef.current;
+    if (!nodes || nodes.length === 0 || !edges) return;
     simulate(nodes, edges, dimensions.width, dimensions.height);
 
     // Clear
@@ -457,16 +380,22 @@ export default function MemoryGraphPage() {
 
           {/* Canvas */}
           <div ref={containerRef} className="flex-1 relative overflow-hidden">
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 cursor-grab active:cursor-grabbing"
-              style={{ width: "100%", height: "100%" }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              onClick={handleClick}
-            />
+            {loading ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 size={48} className="animate-spin" style={{ color: "var(--accent)" }} />
+              </div>
+            ) : (
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                style={{ width: "100%", height: "100%" }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onClick={handleClick}
+              />
+            )}
 
             {/* Category Legend */}
             <div

@@ -3,7 +3,7 @@
  * Functions for communicating with the FastAPI backend.
  */
 
-const API_BASE = "/api";
+const API_BASE = "http://localhost:8000/api";
 
 /* ─── Types ─── */
 
@@ -120,7 +120,7 @@ export async function chatWithDocument(
   return res.json();
 }
 
-/* ─── Health ─── */
+/* ──────────────── Health ──────────────── */
 
 export async function checkHealth(): Promise<boolean> {
   try {
@@ -129,4 +129,36 @@ export async function checkHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/* ──────────────── Memory Graph ──────────────── */
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  category: string;
+  color: string;
+  radius: number;
+  description?: string;
+  date?: string;
+  owner?: string;
+  type?: string;
+  connections?: string[];
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface MemoryGraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export async function getMemoryGraph(): Promise<MemoryGraphData> {
+  const res = await fetch(`${API_BASE}/memory-graph`);
+  if (!res.ok) throw new Error("Failed to fetch memory graph");
+  return res.json();
 }
