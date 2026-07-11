@@ -3,123 +3,24 @@
 import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 import {
-  Mail,
-  HardDrive,
-  Calendar,
-  GitBranch,
-  BookOpen,
-  MessageSquare,
-  StickyNote,
-  FolderOpen,
   Upload,
   FileText,
   Image,
   Mic,
   FolderUp,
+  Trash2,
 } from "lucide-react";
+import { getDocuments, deleteDocument } from "@/lib/api";
 
-const sources = [
-  {
-    name: "Gmail",
-    detail: "siddh.tyagi@gmail.com",
-    icon: Mail,
-    color: "#ea4335",
-    bg: "rgba(234,67,53,0.12)",
-    connected: true,
-    count: "2,134 emails",
-  },
-  {
-    name: "Google Drive",
-    detail: "siddhdrive@gmail.com",
-    icon: HardDrive,
-    color: "#4285f4",
-    bg: "rgba(66,133,244,0.12)",
-    connected: true,
-    count: "1,089 files",
-  },
-  {
-    name: "Google Calendar",
-    detail: "siddhcalendar@gmail.com",
-    icon: Calendar,
-    color: "#34a853",
-    bg: "rgba(52,168,83,0.12)",
-    connected: true,
-    count: "248 events",
-  },
-  {
-    name: "GitHub",
-    detail: "siddhtyagi18",
-    icon: GitBranch,
-    color: "#f0f0f0",
-    bg: "rgba(240,240,240,0.08)",
-    connected: true,
-    count: "143 repositories",
-  },
-  {
-    name: "Notion",
-    detail: "Siddh's Notion",
-    icon: BookOpen,
-    color: "#ffffff",
-    bg: "rgba(255,255,255,0.06)",
-    connected: true,
-    count: "328 pages",
-  },
-  {
-    name: "WhatsApp Backup",
-    detail: "Uploaded backup",
-    icon: MessageSquare,
-    color: "#25d366",
-    bg: "rgba(37,211,102,0.12)",
-    connected: true,
-    count: "1,256 messages",
-  },
-  {
-    name: "OneNote",
-    detail: "siddh@outlook.com",
-    icon: StickyNote,
-    color: "#7b2d8e",
-    bg: "rgba(123,45,142,0.12)",
-    connected: false,
-    count: null,
-  },
-  {
-    name: "Local Files",
-    detail: "Select folder",
-    icon: FolderOpen,
-    color: "#f0a500",
-    bg: "rgba(240,165,0,0.12)",
-    connected: false,
-    count: null,
-  },
-];
-
-const uploadZones = [
-  {
-    icon: FileText,
-    title: "Upload PDF / Docs",
-    desc: "Drag & drop files here or click to browse",
-    color: "#4facfe",
-  },
-  {
-    icon: Image,
-    title: "Upload Images",
-    desc: "Drag & drop images here or click to browse",
-    color: "#e84393",
-  },
-  {
-    icon: Mic,
-    title: "Upload Audio",
-    desc: "Drag & drop audio files or click to browse",
-    color: "#f0a500",
-  },
-  {
-    icon: FolderUp,
-    title: "Upload Folder",
-    desc: "Upload a folder from your device",
-    color: "#00d68f",
-  },
-];
+interface Document {
+  id: string;
+  filename: string;
+  upload_date: string;
+  page_count: number;
+  chunk_count: number;
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -131,6 +32,32 @@ const fadeUp = {
 };
 
 export default function SourcesPage() {
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchDocuments() {
+      try {
+        const docs = await getDocuments();
+        setDocuments(docs);
+      } catch (error) {
+        console.error("Failed to fetch documents:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDocuments();
+  }, []);
+
+  const handleDelete = async (docId: string) => {
+    try {
+      await deleteDocument(docId);
+      setDocuments(documents.filter(d => d.id !== docId));
+    } catch (error) {
+      console.error("Failed to delete document:", error);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="p-8 max-w-[1200px] mx-auto">
@@ -143,87 +70,19 @@ export default function SourcesPage() {
         >
           <h1 className="text-2xl font-bold text-white">Sources</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-            Connect and manage all your data sources
+            Upload and manage your documents
           </p>
         </motion.div>
-
-        {/* Source Cards Grid */}
-        <div className="grid grid-cols-4 gap-4 mb-10">
-          {sources.map((source, i) => {
-            const Icon = source.icon;
-            return (
-              <motion.div
-                key={source.name}
-                className="card p-5"
-                custom={i}
-                initial="hidden"
-                animate="visible"
-                variants={fadeUp}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center"
-                    style={{ background: source.bg }}
-                  >
-                    <Icon size={22} style={{ color: source.color }} />
-                  </div>
-                  {source.connected ? (
-                    <span className="badge-connected">Connected</span>
-                  ) : (
-                    <span className="badge-not-connected">Not connected</span>
-                  )}
-                </div>
-
-                <h3 className="text-sm font-semibold text-white">
-                  {source.name}
-                </h3>
-                <p
-                  className="text-[11px] mt-0.5 truncate"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {source.detail}
-                </p>
-
-                {source.count && (
-                  <p
-                    className="text-[11px] mt-2"
-                    style={{ color: "var(--text-secondary)" }}
-                  >
-                    {source.count}
-                  </p>
-                )}
-
-                <button
-                  className="w-full mt-4 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-[1.02]"
-                  style={
-                    source.connected
-                      ? {
-                          background: "var(--bg-elevated)",
-                          border: "1px solid var(--border)",
-                          color: "var(--text-secondary)",
-                        }
-                      : {
-                          background: "var(--accent)",
-                          color: "#fff",
-                          boxShadow: "0 4px 16px rgba(108,92,231,0.35)",
-                        }
-                  }
-                >
-                  {source.connected ? "Manage" : "Connect"}
-                </button>
-              </motion.div>
-            );
-          })}
-        </div>
 
         {/* Upload Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.5 }}
+          transition={{ delay: 0.1, duration: 0.5 }}
+          className="mb-10"
         >
           <h2 className="text-lg font-semibold text-white mb-4">
-            Upload New Source
+            Upload New Document
           </h2>
           <div className="grid grid-cols-4 gap-4">
             {uploadZones.map((zone, i) => {
@@ -237,10 +96,10 @@ export default function SourcesPage() {
                     background: "var(--bg-card)",
                     minHeight: 160,
                   }}
-                  whileHover={{
+                  whileHover={isPdf ? {
                     borderColor: "rgba(108,92,231,0.4)",
                     background: "var(--bg-card-hover)",
-                  }}
+                  } : {}}
                 >
                   <div
                     className="w-12 h-12 rounded-xl flex items-center justify-center"
@@ -261,10 +120,12 @@ export default function SourcesPage() {
                       {zone.desc}
                     </p>
                   </div>
-                  <Upload
-                    size={14}
-                    style={{ color: "var(--text-muted)", marginTop: 4 }}
-                  />
+                  {isPdf && (
+                    <Upload
+                      size={14}
+                      style={{ color: "var(--text-muted)", marginTop: 4 }}
+                    />
+                  )}
                 </motion.div>
               );
 
@@ -279,6 +140,69 @@ export default function SourcesPage() {
               );
             })}
           </div>
+        </motion.div>
+
+        {/* Uploaded Documents Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+        >
+          <h2 className="text-lg font-semibold text-white mb-4">
+            Uploaded Documents ({documents.length})
+          </h2>
+          {loading ? (
+            <p style={{ color: "var(--text-secondary)" }}>Loading documents...</p>
+          ) : documents.length === 0 ? (
+            <p style={{ color: "var(--text-muted)" }}>No documents uploaded yet. Upload one above!</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              {documents.map((doc, i) => (
+                <motion.div
+                  key={doc.id}
+                  className="card p-5"
+                  custom={i}
+                  initial="hidden"
+                  animate="visible"
+                  variants={fadeUp}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div
+                      className="w-11 h-11 rounded-xl flex items-center justify-center"
+                      style={{ background: "rgba(79,172,254,0.12)" }}
+                    >
+                      <FileText size={22} style={{ color: "#4facfe" }} />
+                    </div>
+                    <button
+                      onClick={() => handleDelete(doc.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-500/10"
+                    >
+                      <Trash2 size={16} style={{ color: "#e84393" }} />
+                    </button>
+                  </div>
+
+                  <h3 className="text-sm font-semibold text-white truncate">
+                    {doc.filename}
+                  </h3>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span
+                      className="text-[10px] px-2 py-1 rounded-full"
+                      style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)" }}
+                    >
+                      {doc.page_count} pages
+                    </span>
+                    <span
+                      className="text-[10px] px-2 py-1 rounded-full"
+                      style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)" }}
+                    >
+                      {doc.chunk_count} chunks
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </motion.div>
       </div>
     </AppLayout>
