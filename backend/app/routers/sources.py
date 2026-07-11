@@ -1,0 +1,180 @@
+"""
+Sources Integration Router
+Handles fetching and processing data from Gmail, Google Drive, and Google Calendar.
+"""
+
+import os
+import json
+from datetime import datetime
+from fastapi import APIRouter, HTTPException
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from dotenv import load_dotenv
+from .auth import user_credentials
+from ..services.pdf_parser import extract_text_from_pdf
+from ..services.chunker import chunk_text
+from ..services.embeddings import generate_embeddings
+from ..services.vector_store import add_document
+
+load_dotenv()
+
+router = APIRouter(prefix="/api/sources", tags=["sources"])
+
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
+METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
+
+def load_metadata() -> dict:
+    if os.path.exists(METADATA_FILE):
+        with open(METADATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_metadata(metadata: dict) -> None:
+    with open(METADATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2)
+
+def get_google_credentials() -> Credentials:
+    user_id = "default_user"
+    if user_id not in user_credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated with Google")
+    creds = user_credentials[user_id]
+    return Credentials(
+        token=creds["token"],
+        refresh_token=creds.get("refresh_token"),
+        token_uri=creds["token_uri"],
+        client_id=creds["client_id"],
+        client_secret=creds["client_secret"],
+        scopes=creds["scopes"],
+    )
+
+@router.post("/gmail/sync")
+async def sync_gmail():
+    """Sync emails from Gmail to our vector DB."""
+    try:
+        creds = get_google_credentials()
+        service = build("gmail", "v1", credentials=creds)
+        results = service.users().messages().list(userId="me", maxResults=10).execute()
+        messages = results.get("messages", [])
+        
+        for msg in messages:
+            msg_data = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
+            headers = msg_data["payload"]["headers"]
+            subject = next(h["value"] for h in headers if h["name"] == "Subject")
+            from_addr = next(h["value"] for h in headers if h["name"] == "From")
+            date = next(h["value"] for h in headers if h["name"] == "Date")
+            
+            # Extract email body (simplified)
+            parts = msg_data["payload"].get("parts", [])
+            body = ""
+            for part in parts:
+                if part["mimeType"] == "text/plain":
+                    body = part["body"]["data"]
+                    import base64
+                    body = base64.urlsafe_b64decode(body).decode("utf-8")
+            
+            # Process and add to vector store
+            content = f"Subject: {subject}\nFrom: {from_addr}\nDate: {date}\n\n{body}"
+            chunks = chunk_text(content)
+            embeddings = generate_embeddings(chunks)
+            
+            doc_id = f"gmail_{msg['id']}"
+            add_document(doc_id, chunks, embeddings)
+            
+            # Update metadata
+            metadata = load_metadata()
+            metadata[doc_id] = {
+                "id": doc_id,
+                "filename": f"Email - {subject}",
+                "source": "gmail",
+                "uploaded_at": datetime.now().isoformat() + "Z",
+                "page_count": 1,
+                "chunk_count": len(chunks),
+            }
+            save_metadata(metadata)
+        
+        return {"status": "success", "message": f"Synced {len(messages)} emails from Gmail"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gmail sync failed: {str(e)}")
+
+@router.post("/drive/sync")
+async def sync_drive():
+    """Sync documents from Google Drive to our vector DB."""
+    try:
+        creds = get_google_credentials()
+        service = build("drive", "v3", credentials=creds)
+        results = service.files().list(pageSize=10, fields="files(id, name, mimeType, createdTime)").execute()
+        files = results.get("files", [])
+        
+        for file in files:
+            if file["mimeType"] == "application/pdf":
+                # Download PDF file
+                request = service.files().get_media(fileId=file["id"])
+                file_content = request.execute()
+                
+                # Extract text from PDF
+                text = extract_text_from_pdf(file_content)
+                
+                # Process and add to vector store
+                chunks = chunk_text(text)
+                embeddings = generate_embeddings(chunks)
+                
+                doc_id = f"drive_{file['id']}"
+                add_document(doc_id, chunks, embeddings)
+                
+                # Update metadata
+                metadata = load_metadata()
+                metadata[doc_id] = {
+                    "id": doc_id,
+                    "filename": file["name"],
+                    "source": "drive",
+                    "uploaded_at": datetime.now().isoformat() + "Z",
+                    "page_count": 1,
+                    "chunk_count": len(chunks),
+                }
+                save_metadata(metadata)
+        
+        return {"status": "success", "message": f"Synced {len(files)} files from Drive"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Drive sync failed: {str(e)}")
+
+@router.post("/calendar/sync")
+async def sync_calendar():
+    """Sync events from Google Calendar to our vector DB."""
+    try:
+        creds = get_google_credentials()
+        service = build("calendar", "v3", credentials=creds)
+        now = datetime.utcnow().isoformat() + "Z"
+        events_result = service.events().list(
+            calendarId="primary", timeMin=now, maxResults=10, singleEvents=True, orderBy="startTime"
+        ).execute()
+        events = events_result.get("items", [])
+        
+        for event in events:
+            start = event["start"].get("dateTime", event["start"].get("date"))
+            end = event["end"].get("dateTime", event["end"].get("date"))
+            summary = event.get("summary", "No title")
+            description = event.get("description", "")
+            
+            # Process and add to vector store
+            content = f"Event: {summary}\nStart: {start}\nEnd: {end}\n\n{description}"
+            chunks = chunk_text(content)
+            embeddings = generate_embeddings(chunks)
+            
+            doc_id = f"calendar_{event['id']}"
+            add_document(doc_id, chunks, embeddings)
+            
+            # Update metadata
+            metadata = load_metadata()
+            metadata[doc_id] = {
+                "id": doc_id,
+                "filename": f"Event - {summary}",
+                "source": "calendar",
+                "uploaded_at": datetime.now().isoformat() + "Z",
+                "page_count": 1,
+                "chunk_count": len(chunks),
+            }
+            save_metadata(metadata)
+        
+        return {"status": "success", "message": f"Synced {len(events)} events from Calendar"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Calendar sync failed: {str(e)}")

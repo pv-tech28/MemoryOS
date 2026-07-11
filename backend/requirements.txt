@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pymupdf
+chromadb
+fastembed
+google-genai
+python-dotenv
+google-auth-oauthlib
+google-api-python-client
+requests

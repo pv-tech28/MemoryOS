@@ -154,6 +154,24 @@ Frontend will be running at one of:
 3. Ask questions about your document in the chat!
 4. View your memory graph at http://localhost:3002/memory-graph
 
+## Google Cloud Setup (for Gmail, Drive, Calendar Integrations)
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project
+2. Enable the following APIs:
+   - Gmail API
+   - Google Drive API
+   - Google Calendar API
+3. Go to **APIs & Services > Credentials** and create OAuth 2.0 Client IDs
+4. Add the following authorized redirect URIs:
+   - http://localhost:8000/api/auth/google/callback
+5. Save your `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+6. Add these to your `backend/.env` file:
+   ```
+   GOOGLE_CLIENT_ID=your_client_id_here
+   GOOGLE_CLIENT_SECRET=your_client_secret_here
+   GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+   ```
+
 ---
 
 # 📌 Remaining Tasks (What's Next)

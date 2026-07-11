@@ -162,3 +162,35 @@ export async function getMemoryGraph(): Promise<MemoryGraphData> {
   if (!res.ok) throw new Error("Failed to fetch memory graph");
   return res.json();
 }
+
+/* ─── Authentication ─── */
+
+export async function loginWithGoogle(): Promise<void> {
+  window.location.href = `${API_BASE}/auth/google/login`;
+}
+
+export async function checkAuthStatus(): Promise<{ authenticated: boolean }> {
+  const res = await fetch(`${API_BASE}/auth/status`);
+  if (!res.ok) throw new Error("Failed to check auth status");
+  return res.json();
+}
+
+/* ─── Sources Sync ─── */
+
+export async function syncGmail(): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${API_BASE}/sources/gmail/sync`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to sync Gmail");
+  return res.json();
+}
+
+export async function syncDrive(): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${API_BASE}/sources/drive/sync`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to sync Drive");
+  return res.json();
+}
+
+export async function syncCalendar(): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${API_BASE}/sources/calendar/sync`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to sync Calendar");
+  return res.json();
+}
