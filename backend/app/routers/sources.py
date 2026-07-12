@@ -5,15 +5,16 @@ Handles fetching and processing data from Gmail, Google Drive, and Google Calend
 
 import os
 import json
+import base64
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
 from .auth import user_credentials
-from ..services.pdf_parser import extract_text_from_pdf
+from ..services.pdf_parser import extract_text_from_pdf_bytes
 from ..services.chunker import chunk_text
-from ..services.embeddings import generate_embeddings
+from ..services.embeddings import embed_texts
 from ..services.vector_store import add_document
 
 load_dotenv()
@@ -23,15 +24,24 @@ router = APIRouter(prefix="/api/sources", tags=["sources"])
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
 METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
 
+
+def _ensure_dirs():
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
 def load_metadata() -> dict:
+    _ensure_dirs()
     if os.path.exists(METADATA_FILE):
-        with open(METADATA_FILE, "r", encoding="utf-8") as f:
+        with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
             return json.load(f)
     return {}
 
+
 def save_metadata(metadata: dict) -> None:
+    _ensure_dirs()
     with open(METADATA_FILE, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
+
 
 def get_google_credentials() -> Credentials:
     user_id = "default_user"
@@ -47,6 +57,7 @@ def get_google_credentials() -> Credentials:
         scopes=creds["scopes"],
     )
 
+
 @router.post("/gmail/sync")
 async def sync_gmail():
     """Sync emails from Gmail to our vector DB."""
@@ -59,26 +70,40 @@ async def sync_gmail():
         for msg in messages:
             msg_data = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
             headers = msg_data["payload"]["headers"]
-            subject = next(h["value"] for h in headers if h["name"] == "Subject")
-            from_addr = next(h["value"] for h in headers if h["name"] == "From")
-            date = next(h["value"] for h in headers if h["name"] == "Date")
             
-            # Extract email body (simplified)
+            # Safely get headers
+            subject = next((h["value"] for h in headers if h["name"] == "Subject"), "No Subject")
+            from_addr = next((h["value"] for h in headers if h["name"] == "From"), "Unknown Sender")
+            date = next((h["value"] for h in headers if h["name"] == "Date"), "")
+            
+            # Extract email body
             parts = msg_data["payload"].get("parts", [])
             body = ""
             for part in parts:
-                if part["mimeType"] == "text/plain":
+                if part["mimeType"] == "text/plain" and part.get("body", {}).get("data"):
                     body = part["body"]["data"]
-                    import base64
                     body = base64.urlsafe_b64decode(body).decode("utf-8")
             
             # Process and add to vector store
             content = f"Subject: {subject}\nFrom: {from_addr}\nDate: {date}\n\n{body}"
             chunks = chunk_text(content)
-            embeddings = generate_embeddings(chunks)
+            if not chunks:
+                continue
+            
+            chunk_texts = [c.text for c in chunks]
+            embeddings = embed_texts(chunk_texts)
             
             doc_id = f"gmail_{msg['id']}"
-            add_document(doc_id, chunks, embeddings)
+            metadatas = [
+                {
+                    "document_name": f"Email - {subject}",
+                    "page_number": 1,
+                    "chunk_index": i,
+                    "source": "gmail",
+                }
+                for i, _ in enumerate(chunks)
+            ]
+            add_document(doc_id, chunk_texts, embeddings, metadatas)
             
             # Update metadata
             metadata = load_metadata()
@@ -86,7 +111,7 @@ async def sync_gmail():
                 "id": doc_id,
                 "filename": f"Email - {subject}",
                 "source": "gmail",
-                "uploaded_at": datetime.now().isoformat() + "Z",
+                "uploaded_at": datetime.now().isoformat(),
                 "page_count": 1,
                 "chunk_count": len(chunks),
             }
@@ -95,6 +120,7 @@ async def sync_gmail():
         return {"status": "success", "message": f"Synced {len(messages)} emails from Gmail"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gmail sync failed: {str(e)}")
+
 
 @router.post("/drive/sync")
 async def sync_drive():
@@ -112,14 +138,26 @@ async def sync_drive():
                 file_content = request.execute()
                 
                 # Extract text from PDF
-                text = extract_text_from_pdf(file_content)
+                text = extract_text_from_pdf_bytes(file_content)
+                if not text.strip():
+                    continue
                 
                 # Process and add to vector store
                 chunks = chunk_text(text)
-                embeddings = generate_embeddings(chunks)
+                chunk_texts = [c.text for c in chunks]
+                embeddings = embed_texts(chunk_texts)
                 
                 doc_id = f"drive_{file['id']}"
-                add_document(doc_id, chunks, embeddings)
+                metadatas = [
+                    {
+                        "document_name": file["name"],
+                        "page_number": 1,
+                        "chunk_index": i,
+                        "source": "drive",
+                    }
+                    for i, _ in enumerate(chunks)
+                ]
+                add_document(doc_id, chunk_texts, embeddings, metadatas)
                 
                 # Update metadata
                 metadata = load_metadata()
@@ -127,7 +165,7 @@ async def sync_drive():
                     "id": doc_id,
                     "filename": file["name"],
                     "source": "drive",
-                    "uploaded_at": datetime.now().isoformat() + "Z",
+                    "uploaded_at": datetime.now().isoformat(),
                     "page_count": 1,
                     "chunk_count": len(chunks),
                 }
@@ -136,6 +174,7 @@ async def sync_drive():
         return {"status": "success", "message": f"Synced {len(files)} files from Drive"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Drive sync failed: {str(e)}")
+
 
 @router.post("/calendar/sync")
 async def sync_calendar():
@@ -158,10 +197,20 @@ async def sync_calendar():
             # Process and add to vector store
             content = f"Event: {summary}\nStart: {start}\nEnd: {end}\n\n{description}"
             chunks = chunk_text(content)
-            embeddings = generate_embeddings(chunks)
+            chunk_texts = [c.text for c in chunks]
+            embeddings = embed_texts(chunk_texts)
             
             doc_id = f"calendar_{event['id']}"
-            add_document(doc_id, chunks, embeddings)
+            metadatas = [
+                {
+                    "document_name": f"Event - {summary}",
+                    "page_number": 1,
+                    "chunk_index": i,
+                    "source": "calendar",
+                }
+                for i, _ in enumerate(chunks)
+            ]
+            add_document(doc_id, chunk_texts, embeddings, metadatas)
             
             # Update metadata
             metadata = load_metadata()
@@ -169,7 +218,7 @@ async def sync_calendar():
                 "id": doc_id,
                 "filename": f"Event - {summary}",
                 "source": "calendar",
-                "uploaded_at": datetime.now().isoformat() + "Z",
+                "uploaded_at": datetime.now().isoformat(),
                 "page_count": 1,
                 "chunk_count": len(chunks),
             }

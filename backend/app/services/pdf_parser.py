@@ -88,3 +88,16 @@ def parse_pdf(file_path: str) -> ParsedDocument:
         page_count=page_count,
         metadata=metadata,
     )
+
+
+def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
+    """Extract text from PDF bytes."""
+    doc = fitz.open("pdf", pdf_bytes)
+    full_text_parts: list[str] = []
+    for page_num in range(doc.page_count):
+        page = doc[page_num]
+        text = page.get_text("text").strip()
+        if text:
+            full_text_parts.append(text)
+    doc.close()
+    return "\n\n".join(full_text_parts)

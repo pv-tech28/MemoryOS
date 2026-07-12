@@ -1,0 +1,10 @@
+
+.venv
+__pycache__
+*.pyc
+uploads
+chroma_db
+test_*.py
+model_cache
+fastembed_cache
+.env

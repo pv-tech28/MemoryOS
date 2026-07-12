@@ -35,9 +35,10 @@ const categories: Record<string, string> = {
   Project: "#00d68f",
   Meeting: "#f0a500",
   Document: "#e84393",
-  Event: "#6c5ce7",
+  Event: "#34a853",
   Code: "#f0f0f0",
   Chat: "#25d366",
+  Email: "#ea4335",
 };
 
 /* ──────────────── Force Simulation ──────────────── */

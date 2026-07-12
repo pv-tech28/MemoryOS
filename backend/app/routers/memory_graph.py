@@ -20,7 +20,7 @@ METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
 def _load_metadata() -> dict:
     """Load document metadata from disk."""
     if os.path.exists(METADATA_FILE):
-        with open(METADATA_FILE, "r", encoding="utf-8") as f:
+        with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
             return json.load(f)
     return {}
 
@@ -55,44 +55,63 @@ async def get_memory_graph():
         nodes.append(user_node)
         node_ids.add("user")
 
-        # 2. Add document nodes
+        # 2. Add document/source nodes
         for doc in documents:
             doc_id = doc["id"]
-            filename = doc["filename"].replace(".pdf", "")
+            filename = doc["filename"]
             if len(filename) > 20:
                 filename = filename[:18] + "..."
 
-            # Determine document category/type
-            category = "Document"
-            color = "#e84393"
+            # Determine source type, category, color and label
+            source = doc.get("source", "upload")
+            if source == "gmail":
+                category = "Email"
+                color = "#ea4335"
+                label = f"{filename}\n(Email)"
+                description = f"Synced Gmail email with {doc.get('chunk_count', 0)} chunks"
+            elif source == "drive":
+                category = "Document"
+                color = "#4285f4"
+                label = f"{filename}\n(Drive)"
+                description = f"Synced Google Drive file with {doc.get('chunk_count', 0)} chunks"
+            elif source == "calendar":
+                category = "Event"
+                color = "#34a853"
+                label = f"{filename}\n(Event)"
+                description = f"Synced Google Calendar event with {doc.get('chunk_count', 0)} chunks"
+            else:  # uploaded PDF
+                category = "Document"
+                color = "#e84393"
+                label = f"{filename}\n(PDF)"
+                description = f"Uploaded document with {doc.get('page_count', 0)} pages and {doc.get('chunk_count', 0)} chunks"
 
             doc_node = {
-                "id": f"doc_{doc_id}",
-                "label": f"{filename}\n(PDF)",
+                "id": f"node_{doc_id}",
+                "label": label,
                 "category": category,
                 "color": color,
                 "radius": 30,
-                "description": f"Uploaded document with {doc['page_count']} pages and {doc['chunk_count']} chunks",
+                "description": description,
                 "date": datetime.fromisoformat(doc["uploaded_at"].rstrip("Z")).strftime("%d %b %Y"),
                 "owner": "User",
-                "type": "Document",
+                "type": category,
                 "connections": [],
             }
             nodes.append(doc_node)
-            node_ids.add(f"doc_{doc_id}")
+            node_ids.add(f"node_{doc_id}")
             user_node["connections"].append(filename)
 
         # --- Edges ---
         edges = []
 
-        # Connect all documents to user
+        # Connect all documents/sources to user
         for doc in documents:
-            doc_id = f"doc_{doc['id']}"
+            doc_id = f"node_{doc['id']}"
             edges.append(
                 {
                     "source": "user",
                     "target": doc_id,
-                    "label": "Uploaded",
+                    "label": "Connected",
                 }
             )
 

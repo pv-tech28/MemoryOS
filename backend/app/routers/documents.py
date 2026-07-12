@@ -33,7 +33,7 @@ def _load_metadata() -> dict:
     """Load document metadata from disk."""
     _ensure_dirs()
     if os.path.exists(METADATA_FILE):
-        with open(METADATA_FILE, "r") as f:
+        with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
             return json.load(f)
     return {}
 
