@@ -15,9 +15,18 @@ import {
   Calendar,
   Lightbulb,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { getMemoryGraph, type MemoryGraphData, type GraphNode as APIGraphNode, type GraphEdge as APIGraphEdge } from "@/lib/api";
+import {
+  getMemoryGraph,
+  type MemoryGraphData,
+  type GraphNode as APIGraphNode,
+  type GraphEdge as APIGraphEdge,
+  getMemories,
+  deleteMemory,
+  type Memory
+} from "@/lib/api";
 
 /* ──────────────── Graph Data ──────────────── */
 
@@ -39,6 +48,19 @@ const categories: Record<string, string> = {
   Code: "#f0f0f0",
   Chat: "#25d366",
   Email: "#ea4335",
+};
+
+const memoryTypeColors: Record<string, string> = {
+  personal: "#4facfe",
+  goal: "#00d68f",
+  project: "#f0a500",
+  preference: "#e84393",
+  skill: "#34a853",
+  deadline: "#f0f0f0",
+  task: "#25d366",
+  education: "#ea4335",
+  career: "#4285F4",
+  custom: "#A142F4",
 };
 
 /* ──────────────── Force Simulation ──────────────── */
@@ -137,6 +159,8 @@ export default function MemoryGraphPage() {
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [graphData, setGraphData] = useState<MemoryGraphData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [memoriesLoading, setMemoriesLoading] = useState(true);
+  const [memories, setMemories] = useState<Memory[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const dragRef = useRef<{ node: GraphNode | null; offsetX: number; offsetY: number }>({
@@ -172,6 +196,21 @@ export default function MemoryGraphPage() {
       }
     };
     fetchGraph();
+  }, []);
+
+  // Fetch memories
+  useEffect(() => {
+    const fetchMemories = async () => {
+      try {
+        const data = await getMemories();
+        setMemories(data.memories);
+        setMemoriesLoading(false);
+      } catch (err) {
+        console.error("Failed to fetch memories:", err);
+        setMemoriesLoading(false);
+      }
+    };
+    fetchMemories();
   }, []);
 
   // Initialize nodes when dimensions or graph data change
@@ -333,6 +372,15 @@ export default function MemoryGraphPage() {
     if (node) setSelectedNode(node);
   };
 
+  const handleDeleteMemory = async (memoryId: string) => {
+    try {
+      await deleteMemory(memoryId);
+      setMemories(prev => prev.filter(m => m.id !== memoryId));
+    } catch (err) {
+      console.error("Failed to delete memory:", err);
+    }
+  };
+
   const DetailIcon = selectedNode
     ? detailIcons[selectedNode.type || selectedNode.category] || FolderOpen
     : FolderOpen;
@@ -422,9 +470,9 @@ export default function MemoryGraphPage() {
           </div>
         </div>
 
-        {/* Right Panel - Node Details */}
+        {/* Right Panel - Node Details & Memories */}
         <motion.div
-          className="w-[320px] flex-shrink-0 overflow-y-auto p-6"
+          className="w-[360px] flex-shrink-0 overflow-y-auto p-6 flex flex-col gap-6"
           style={{
             borderLeft: "1px solid var(--border)",
             background: "var(--bg-secondary)",
@@ -433,103 +481,156 @@ export default function MemoryGraphPage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2, duration: 0.4 }}
         >
-          <h2 className="text-sm font-bold text-white mb-5">Node Details</h2>
+          {/* Node Details */}
+          <div className="flex-1">
+            <h2 className="text-sm font-bold text-white mb-5">Node Details</h2>
 
-          {selectedNode ? (
-            <div>
-              {/* Node Identity */}
-              <div className="flex items-center gap-3 mb-5">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: selectedNode.color + "22" }}
-                >
-                  <DetailIcon size={20} style={{ color: selectedNode.color }} />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-white">
-                    {selectedNode.label.replace("\n", " ")}
-                  </p>
-                  <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    Type: {selectedNode.type || selectedNode.category}
-                  </p>
-                </div>
-              </div>
-
-              {/* Details */}
-              {selectedNode.description && (
-                <div className="mb-5">
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-wider mb-2"
-                    style={{ color: "var(--text-muted)" }}
+            {selectedNode ? (
+              <div>
+                {/* Node Identity */}
+                <div className="flex items-center gap-3 mb-5">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: selectedNode.color + "22" }}
                   >
-                    Description
-                  </p>
-                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                    {selectedNode.description}
-                  </p>
-                </div>
-              )}
-
-              {selectedNode.date && (
-                <div className="flex items-center gap-2 mb-2">
-                  <Clock size={12} style={{ color: "var(--text-muted)" }} />
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    Created: {selectedNode.date}
-                  </p>
-                </div>
-              )}
-
-              {selectedNode.owner && (
-                <div className="flex items-center gap-2 mb-5">
-                  <User size={12} style={{ color: "var(--text-muted)" }} />
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    Owner: {selectedNode.owner}
-                  </p>
-                </div>
-              )}
-
-              {/* Connected To */}
-              {selectedNode.connections && (
-                <div>
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-wider mb-3"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Connected To ({selectedNode.connections.length})
-                  </p>
-                  <div className="space-y-2">
-                    {selectedNode.connections.map((conn, i) => (
-                      <div
-                        key={i}
-                        className="card px-3 py-2.5 flex items-center gap-2.5 cursor-pointer"
-                      >
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{
-                            background:
-                              Object.values(categories)[
-                                i % Object.values(categories).length
-                              ],
-                          }}
-                        />
-                        <p className="text-xs text-white">{conn}</p>
-                      </div>
-                    ))}
-                    <button
-                      className="text-[11px] font-medium mt-2"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      +2 more
-                    </button>
+                    <DetailIcon size={20} style={{ color: selectedNode.color }} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      {selectedNode.label.replace("\n", " ")}
+                    </p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                      Type: {selectedNode.type || selectedNode.category}
+                    </p>
                   </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Click on a node to see details
-            </p>
-          )}
+
+                {/* Details */}
+                {selectedNode.description && (
+                  <div className="mb-5">
+                    <p
+                      className="text-[10px] font-semibold uppercase tracking-wider mb-2"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Description
+                    </p>
+                    <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                      {selectedNode.description}
+                    </p>
+                  </div>
+                )}
+
+                {selectedNode.date && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock size={12} style={{ color: "var(--text-muted)" }} />
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      Created: {selectedNode.date}
+                    </p>
+                  </div>
+                )}
+
+                {selectedNode.owner && (
+                  <div className="flex items-center gap-2 mb-5">
+                    <User size={12} style={{ color: "var(--text-muted)" }} />
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      Owner: {selectedNode.owner}
+                    </p>
+                  </div>
+                )}
+
+                {/* Connected To */}
+                {selectedNode.connections && (
+                  <div>
+                    <p
+                      className="text-[10px] font-semibold uppercase tracking-wider mb-3"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Connected To ({selectedNode.connections.length})
+                    </p>
+                    <div className="space-y-2">
+                      {selectedNode.connections.map((conn, i) => (
+                        <div
+                          key={i}
+                          className="card px-3 py-2.5 flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{
+                              background:
+                                Object.values(categories)[
+                                  i % Object.values(categories).length
+                                ],
+                            }}
+                          />
+                          <p className="text-xs text-white">{conn}</p>
+                        </div>
+                      ))}
+                      <button
+                        className="text-[11px] font-medium mt-2"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        +2 more
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Click on a node to see details
+              </p>
+            )}
+          </div>
+
+          {/* Memories List */}
+          <div>
+            <h2 className="text-sm font-bold text-white mb-5">Long-Term Memories</h2>
+            {memoriesLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 size={20} className="animate-spin" style={{ color: "var(--accent)" }} />
+              </div>
+            ) : memories.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                No memories extracted yet. Chat to create some!
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {memories.map(memory => (
+                  <div
+                    key={memory.id}
+                    className="card p-3 flex flex-col gap-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ background: memoryTypeColors[memory.type] || "#A142F4" }}
+                        />
+                        <span className="text-[10px] font-semibold uppercase" style={{ color: "var(--text-muted)" }}>
+                          {memory.type}
+                        </span>
+                        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                          • Importance: {memory.importance.toFixed(1)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteMemory(memory.id)}
+                        className="p-1 rounded hover:bg-red-500/20 transition-colors"
+                      >
+                        <Trash2 size={10} style={{ color: "var(--text-muted)" }} />
+                      </button>
+                    </div>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {memory.memory}
+                    </p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                      {new Date(memory.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </motion.div>
       </div>
     </AppLayout>
