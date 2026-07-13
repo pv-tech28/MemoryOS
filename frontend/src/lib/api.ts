@@ -27,6 +27,7 @@ export interface SourceReference {
 }
 
 export interface ChatResponse {
+  chat_id: string;
   answer: string;
   sources: SourceReference[];
   confidence: number;
@@ -101,6 +102,7 @@ export async function deleteDocument(docId: string): Promise<void> {
 
 export async function chatWithDocument(
   question: string,
+  chatId?: string,
   documentId?: string
 ): Promise<ChatResponse> {
   const res = await fetch(`${API_BASE}/chat`, {
@@ -108,6 +110,7 @@ export async function chatWithDocument(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       question,
+      chat_id: chatId || null,
       document_id: documentId || null,
     }),
   });
@@ -193,4 +196,49 @@ export async function syncCalendar(): Promise<{ status: string; message: string 
   const res = await fetch(`${API_BASE}/sources/calendar/sync`, { method: "POST" });
   if (!res.ok) throw new Error("Failed to sync Calendar");
   return res.json();
+}
+
+/* ─── Memories ─── */
+
+export interface Memory {
+  id: string;
+  chat_id: string;
+  user_id: string;
+  type: string;
+  memory: string;
+  importance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MemoryListResponse {
+  memories: Memory[];
+  total: number;
+}
+
+export async function getMemories(chatId?: string): Promise<MemoryListResponse> {
+  let url = `${API_BASE}/memories`;
+  if (chatId) {
+    url += `?chat_id=${chatId}`;
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch memories");
+  return res.json();
+}
+
+export async function getRelevantMemories(query: string, chatId?: string): Promise<MemoryListResponse> {
+  let url = `${API_BASE}/memories/relevant?query=${encodeURIComponent(query)}`;
+  if (chatId) {
+    url += `&chat_id=${chatId}`;
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch relevant memories");
+  return res.json();
+}
+
+export async function deleteMemory(memoryId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/memories/${memoryId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete memory");
 }

@@ -33,6 +33,7 @@ interface ChatMessage {
 
 export default function AskPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatId, setChatId] = useState<string | undefined>(undefined);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
@@ -76,8 +77,12 @@ export default function AskPage() {
     try {
       const response: ChatResponse = await chatWithDocument(
         question,
+        chatId,
         selectedDocId
       );
+
+      // Set chatId for future messages
+      setChatId(response.chat_id);
 
       const aiMsg: ChatMessage = {
         role: "ai",
@@ -111,6 +116,7 @@ export default function AskPage() {
 
   const clearChat = () => {
     setMessages([]);
+    setChatId(undefined);
   };
 
   const confidenceColor = (conf: number) => {
