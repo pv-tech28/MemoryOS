@@ -6,6 +6,7 @@ Handles fetching and processing data from Gmail, Google Drive, and Google Calend
 import os
 import json
 import base64
+import traceback
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from google.oauth2.credentials import Credentials
@@ -48,6 +49,10 @@ def get_google_credentials() -> Credentials:
     if user_id not in user_credentials:
         raise HTTPException(status_code=401, detail="Not authenticated with Google")
     creds = user_credentials[user_id]
+    expiry = None
+    if creds.get("expiry"):
+        from datetime import datetime
+        expiry = datetime.fromisoformat(creds["expiry"])
     return Credentials(
         token=creds["token"],
         refresh_token=creds.get("refresh_token"),
@@ -55,6 +60,7 @@ def get_google_credentials() -> Credentials:
         client_id=creds["client_id"],
         client_secret=creds["client_secret"],
         scopes=creds["scopes"],
+        expiry=expiry,
     )
 
 
@@ -79,10 +85,17 @@ async def sync_gmail():
             # Extract email body
             parts = msg_data["payload"].get("parts", [])
             body = ""
-            for part in parts:
-                if part["mimeType"] == "text/plain" and part.get("body", {}).get("data"):
-                    body = part["body"]["data"]
-                    body = base64.urlsafe_b64decode(body).decode("utf-8")
+            # Check if payload has direct body data first
+            if msg_data["payload"].get("body", {}).get("data"):
+                body = msg_data["payload"]["body"]["data"]
+                body = base64.urlsafe_b64decode(body).decode("utf-8")
+            # Otherwise check parts
+            else:
+                for part in parts:
+                    if part["mimeType"] == "text/plain" and part.get("body", {}).get("data"):
+                        body = part["body"]["data"]
+                        body = base64.urlsafe_b64decode(body).decode("utf-8")
+                        break
             
             # Process and add to vector store
             content = f"Subject: {subject}\nFrom: {from_addr}\nDate: {date}\n\n{body}"
@@ -119,6 +132,8 @@ async def sync_gmail():
         
         return {"status": "success", "message": f"Synced {len(messages)} emails from Gmail"}
     except Exception as e:
+        print("Gmail sync error:")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Gmail sync failed: {str(e)}")
 
 
@@ -173,6 +188,8 @@ async def sync_drive():
         
         return {"status": "success", "message": f"Synced {len(files)} files from Drive"}
     except Exception as e:
+        print("Drive sync error:")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Drive sync failed: {str(e)}")
 
 
@@ -226,4 +243,6 @@ async def sync_calendar():
         
         return {"status": "success", "message": f"Synced {len(events)} events from Calendar"}
     except Exception as e:
+        print("Calendar sync error:")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Calendar sync failed: {str(e)}")

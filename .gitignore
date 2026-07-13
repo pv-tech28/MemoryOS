@@ -1,6 +1,7 @@
 # Backend temporary files
 backend/.venv/
 backend/chroma_db/
+backend/faiss_store/
 backend/uploads/
 backend/model_cache/
 backend/.env
