@@ -5,6 +5,7 @@ backend/faiss_store/
 backend/uploads/
 backend/model_cache/
 backend/.env
+backend/memory_db.sqlite
 backend/__pycache__/
 backend/**/__pycache__/
 backend/test*.py
