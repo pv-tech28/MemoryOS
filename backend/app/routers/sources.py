@@ -127,6 +127,9 @@ async def sync_gmail():
                 "uploaded_at": datetime.now().isoformat(),
                 "page_count": 1,
                 "chunk_count": len(chunks),
+                "file_size": len(content.encode("utf-8")),
+                "status": "ready",
+                "metadata": {}
             }
             save_metadata(metadata)
         
@@ -143,7 +146,7 @@ async def sync_drive():
     try:
         creds = get_google_credentials()
         service = build("drive", "v3", credentials=creds)
-        results = service.files().list(pageSize=10, fields="files(id, name, mimeType, createdTime)").execute()
+        results = service.files().list(pageSize=10, fields="files(id, name, mimeType, createdTime, size)").execute()
         files = results.get("files", [])
         
         for file in files:
@@ -183,6 +186,9 @@ async def sync_drive():
                     "uploaded_at": datetime.now().isoformat(),
                     "page_count": 1,
                     "chunk_count": len(chunks),
+                    "file_size": int(file.get("size", len(file_content))),
+                    "status": "ready",
+                    "metadata": {}
                 }
                 save_metadata(metadata)
         
@@ -238,6 +244,9 @@ async def sync_calendar():
                 "uploaded_at": datetime.now().isoformat(),
                 "page_count": 1,
                 "chunk_count": len(chunks),
+                "file_size": len(content.encode("utf-8")),
+                "status": "ready",
+                "metadata": {}
             }
             save_metadata(metadata)
         
