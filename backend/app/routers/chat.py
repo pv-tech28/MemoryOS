@@ -2,6 +2,8 @@
 Chat Router
 Handles the RAG-based chat with documents and memory extraction.
 """
+import os
+from dotenv import load_dotenv
 
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import ChatRequest, ChatResponse, SourceReference, RelatedEntity
@@ -15,6 +17,9 @@ from app.services.conversation_memory import (
     delete_chat
 )
 from app.services.memory_extractor import extract_memories
+
+load_dotenv()
+MEMORY_EXTRACTION_ENABLED = os.getenv("MEMORY_EXTRACTION_ENABLED", "true").lower() == "true"
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -70,12 +75,15 @@ async def chat_with_document(request: ChatRequest):
             processing_time=result["processing_time"],
         )
 
-        # Extract memories from conversation
-        try:
-            full_history = get_chat_history(chat_id)
-            extract_memories(chat_id, full_history)
-        except Exception as extract_error:
-            print(f"[Memory Extractor] Error extracting memories: {extract_error}")
+        # Extract memories from conversation (if enabled)
+        if MEMORY_EXTRACTION_ENABLED:
+            try:
+                full_history = get_chat_history(chat_id)
+                # Only extract memories every 3 messages or if it's the first message
+                if len(full_history) % 3 == 0 or len(full_history) == 1:
+                    extract_memories(chat_id, full_history)
+            except Exception as extract_error:
+                print(f"[Memory Extractor] Error extracting memories: {extract_error}")
 
         # Convert related entities to model
         related_entities = None

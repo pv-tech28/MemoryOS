@@ -1,22 +1,36 @@
 
 """
 RAG Engine Service
+<<<<<<< HEAD
 Retrieval-Augmented Generation pipeline using ChromaDB + OpenRouter + Memory Intelligence Layer.
+=======
+Retrieval-Augmented Generation pipeline using ChromaDB + LLM Provider.
+>>>>>>> 007607a (Describe your changes)
 """
 
 import os
 import time
+<<<<<<< HEAD
 import traceback
+=======
+>>>>>>> 007607a (Describe your changes)
 from dotenv import load_dotenv
 from app.services.embeddings import embed_query
 from app.services.vector_store import search as vector_search
 from app.services.memory_store import get_relevant_memories
+<<<<<<< HEAD
 from app.services.memory_intelligence import get_personalized_context, build_memory_intelligence_prompt
 from app.services.ai_provider import generate_response
 
 load_dotenv()
 
 
+=======
+from app.services.llm import get_llm_provider
+
+load_dotenv()
+
+>>>>>>> 007607a (Describe your changes)
 SYSTEM_PROMPT = """You are EVOLVE AI, an intelligent memory assistant. Use the provided memories, conversation history, and document context to answer questions.
 
 RULES:
@@ -126,6 +140,7 @@ def query(
         final_prompt += history_prompt + "\n\n"
     final_prompt += f"USER'S QUESTION:\n{question}\n\nAnswer using all the context above. End with [CONFIDENCE: X.X]"
 
+<<<<<<< HEAD
     # 4. Query OpenRouter
     try:
         raw_answer = generate_response(
@@ -138,19 +153,45 @@ def query(
             raw_answer = "I was unable to generate a response."
     except Exception as e:
         print(f"[RAG] Error querying OpenRouter: {e}")
+=======
+    # 4. Get LLM provider
+    llm = get_llm_provider()
+
+    # 5. Query LLM
+    temperature = float(os.getenv("TEMPERATURE", "0.3"))
+    max_tokens = int(os.getenv("MAX_OUTPUT_TOKENS", "1024"))
+    
+    try:
+        llm_response = llm.generate(
+            prompt=final_prompt,
+            system_prompt=SYSTEM_PROMPT,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        raw_answer = llm_response["text"] or "I was unable to generate a response."
+    except Exception as e:
+        import traceback
+        print(f"[RAG] Error querying LLM: {e}")
+        print(f"[DEBUG] Full exception traceback:")
+>>>>>>> 007607a (Describe your changes)
         traceback.print_exc()
+        print("[DEBUG] Entering fallback mode due to API error")
         # Fallback response
         primary_chunks = search_results[:2]
+<<<<<<< HEAD
         raw_answer = f"⚠️ OpenRouter API Error: {e}\n\nHere is relevant text from your documents:\n"
+=======
+        raw_answer = f"⚠️ LLM API Error: {e}\n\nHere is relevant text from your documents:\n"
+>>>>>>> 007607a (Describe your changes)
         for chunk in primary_chunks:
             p_num = chunk["metadata"].get("page_number")
             raw_answer += f"\n- {'Page ' + str(p_num) if p_num else 'Document'}: {chunk['content'][:150]}..."
         raw_answer += "\n\n[CONFIDENCE: 0.5]"
 
-    # 5. Parse confidence and return result
+    # 6. Parse confidence and return result
     answer, confidence = parse_confidence(raw_answer)
 
-    # 6. Build source references
+    # 7. Build source references
     sources = []
     for result in search_results:
         sources.append({

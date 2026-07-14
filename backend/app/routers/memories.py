@@ -5,12 +5,21 @@ Handles long-term memory endpoints.
 """
 
 from fastapi import APIRouter, HTTPException
-from app.models.schemas import Memory, MemoryListResponse
+from app.models.schemas import (
+    Memory, MemoryListResponse,
+    GraphNode, GraphEdge, GraphData, RelatedMemoriesResponse
+)
 from app.services.memory_store import (
     get_relevant_memories,
     get_memories_by_chat_id,
     delete_memory,
     update_memory
+)
+from app.services.memory_graph_builder import (
+    get_all_graph_nodes,
+    get_all_graph_edges,
+    get_related_memories,
+    get_graph_stats
 )
 
 router = APIRouter(prefix="/api/memories", tags=["memories"])
@@ -61,3 +70,39 @@ def remove_memory(memory_id: str):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/graph", response_model=GraphData)
+def get_graph():
+    """Get all graph nodes and edges."""
+    try:
+        nodes = [GraphNode(**n) for n in get_all_graph_nodes()]
+        edges = [GraphEdge(**e) for e in get_all_graph_edges()]
+        return GraphData(nodes=nodes, edges=edges)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/related/{entity_name}", response_model=RelatedMemoriesResponse)
+def get_related_entity_memories(entity_name: str):
+    """Get related memories for an entity."""
+    try:
+        result = get_related_memories(entity_name)
+        return RelatedMemoriesResponse(
+            node=GraphNode(**result["node"]) if result["node"] else None,
+            edges=result["edges"],
+            related_nodes=[GraphNode(**n) for n in result["related_nodes"]],
+            memories=[Memory(**m) for m in result["memories"]]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stats")
+def get_stats():
+    """Get graph statistics."""
+    try:
+        return get_graph_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

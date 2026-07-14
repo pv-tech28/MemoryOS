@@ -117,3 +117,34 @@ class MemoryListResponse(BaseModel):
     """Response model for listing memories."""
     memories: list[Memory]
     total: int
+
+
+class GraphNode(BaseModel):
+    id: str
+    name: str
+    type: str
+    description: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class GraphEdge(BaseModel):
+    id: str
+    source_node_id: str
+    target_node_id: str
+    type: str
+    description: Optional[str] = None
+    created_at: str
+
+
+class GraphData(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+class RelatedMemoriesResponse(BaseModel):
+    node: Optional[GraphNode]
+    edges: list[dict]
+    related_nodes: list[GraphNode]
+    memories: list[Memory]
+

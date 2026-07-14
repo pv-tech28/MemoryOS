@@ -261,10 +261,77 @@ export async function getRelevantMemories(query: string, chatId?: string): Promi
 }
 
 export async function deleteMemory(memoryId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/memories/${memoryId}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Failed to delete memory");
+    const res = await fetch(`${API_BASE}/memories/${memoryId}`, {
+        method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete memory");
+}
+
+export interface GraphNode {
+    id: string;
+    name: string;
+    type: string;
+    description: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface GraphEdge {
+    id: string;
+    source_node_id: string;
+    target_node_id: string;
+    type: string;
+    description: string | null;
+    created_at: string;
+}
+
+export interface GraphData {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+}
+
+export interface RelatedMemoriesResponse {
+    node: GraphNode | null;
+    edges: any[];
+    related_nodes: GraphNode[];
+    memories: Memory[];
+}
+
+export async function getGraph(): Promise<GraphData> {
+    const res = await fetch(`${API_BASE}/memories/graph`);
+    if (!res.ok) throw new Error("Failed to get graph");
+    return res.json();
+}
+
+export async function getRelatedMemories(entityName: string): Promise<RelatedMemoriesResponse> {
+    const res = await fetch(`${API_BASE}/memories/related/${encodeURIComponent(entityName)}`);
+    if (!res.ok) throw new Error("Failed to get related memories");
+    return res.json();
+}
+
+export interface GraphStats {
+    total_nodes: number;
+    total_edges: number;
+    node_counts: Record<string, number>;
+    most_connected: {
+        id: string;
+        name: string;
+        type: string;
+        connection_count: number;
+    } | null;
+    newest_node: {
+        id: string;
+        name: string;
+        type: string;
+        created_at: string;
+    } | null;
+    avg_connections: number;
+}
+
+export async function getGraphStats(): Promise<GraphStats> {
+    const res = await fetch(`${API_BASE}/memories/stats`);
+    if (!res.ok) throw new Error("Failed to get graph stats");
+    return res.json();
 }
 
 /* ─── Timeline ─── */

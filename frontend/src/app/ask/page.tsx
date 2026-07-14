@@ -27,6 +27,7 @@ import remarkGfm from "remark-gfm";
 import {
   chatWithDocument,
   getDocuments,
+  checkHealth,
   type DocumentInfo,
   type ChatResponse,
   type SourceReference,
@@ -78,8 +79,24 @@ export default function AskPage() {
 
   // Load documents
   useEffect(() => {
-    loadDocuments();
-  }, []);
+    const checkAndLoad = async () => {
+      const isOnline = await checkHealth();
+      setBackendOnline(isOnline);
+      if (isOnline) {
+        await loadDocuments();
+      }
+    };
+    checkAndLoad();
+    // Poll backend health every 2 seconds
+    const interval = setInterval(async () => {
+      const isOnline = await checkHealth();
+      if (isOnline && !backendOnline) {
+        await loadDocuments();
+      }
+      setBackendOnline(isOnline);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [backendOnline]);
 
   const loadDocuments = async () => {
     try {
