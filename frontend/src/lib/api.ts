@@ -291,11 +291,15 @@ export interface DashboardStats {
   total_timeline_events: number;
   total_nodes: number;
   total_edges: number;
+  clusters: number;
   today_memories: number;
   recent_activity: TimelineEvent[];
   connected_sources: any[];
   suggested_queries: string[];
   last_sync: string;
+  todays_focus: string;
+  upcoming_events_label: string;
+  graph_has_data: boolean;
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {

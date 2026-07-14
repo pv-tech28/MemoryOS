@@ -139,34 +139,34 @@ export default function DashboardPage() {
     : [];
 
   // Quick status cards
-  const quickStatus = stats
-    ? [
-        {
-          label: "Last Sync",
-          value: stats.last_sync,
-          icon: Clock,
-          color: "#f0a500",
-        },
-        {
-          label: "Today's New Memories",
-          value: stats.today_memories.toString(),
-          icon: Brain,
-          color: "#6c5ce7",
-        },
-        {
-          label: "Today's Focus",
-          value: "Memory Review",
-          icon: Zap,
-          color: "#4facfe",
-        },
-        {
-          label: "Upcoming Events",
-          value: stats.total_calendar.toString(),
-          icon: Calendar,
-          color: "#34a853",
-        },
-      ]
-    : [];
+    const quickStatus = stats
+        ? [
+            {
+                label: "Last Sync",
+                value: stats.last_sync,
+                icon: Clock,
+                color: "#f0a500",
+            },
+            {
+                label: "Today's New Memories",
+                value: stats.today_memories.toString(),
+                icon: Brain,
+                color: "#6c5ce7",
+            },
+            {
+                label: "Today's Focus",
+                value: stats.todays_focus,
+                icon: Zap,
+                color: "#4facfe",
+            },
+            {
+                label: "Upcoming Events",
+                value: stats.upcoming_events_label,
+                icon: Calendar,
+                color: "#34a853",
+            },
+        ]
+        : [];
 
   return (
     <AppLayout>
@@ -598,7 +598,7 @@ export default function DashboardPage() {
               Knowledge Growth
             </h2>
           </div>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-6 mb-6">
             <div
               className="card p-6 rounded-2xl"
               style={{
@@ -647,6 +647,22 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+          {!stats?.graph_has_data && (
+            <div
+              className="card p-6 rounded-2xl"
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <p
+                className="text-sm"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Your knowledge graph will grow automatically as EVOLVE learns from your conversations, documents and connected sources.
+              </p>
+            </div>
+          )}
         </motion.div>
       </div>
     </AppLayout>
