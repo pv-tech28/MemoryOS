@@ -1,3 +1,4 @@
+
 "use client";
 
 import AppLayout from "@/components/layout/AppLayout";
@@ -16,8 +17,25 @@ import {
   Lightbulb,
   Loader2,
   Trash2,
+  Search,
+  X
 } from "lucide-react";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import ReactFlow, {
+  ReactFlowProvider,
+  addEdge,
+  useNodesState,
+  useEdgesState,
+  Controls,
+  Background,
+  MiniMap,
+  Handle,
+  Position,
+  MarkerType,
+  Node,
+  Edge,
+} from "reactflow";
+import "reactflow/dist/style.css";
 import {
   getMemoryGraph,
   type MemoryGraphData,
@@ -25,29 +43,27 @@ import {
   type GraphEdge as APIGraphEdge,
   getMemories,
   deleteMemory,
-  type Memory
+  type Memory,
+  getRelatedMemories
 } from "@/lib/api";
 
-/* ──────────────── Graph Data ──────────────── */
-
-interface GraphNode extends APIGraphNode {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-}
-
-interface GraphEdge extends APIGraphEdge {}
-
-const categories: Record<string, string> = {
+const categories = {
   Person: "#4facfe",
   Project: "#00d68f",
-  Meeting: "#f0a500",
+  Skill: "#f0a500",
+  Company: "#4285f4",
+  Technology: "#ff6b6b",
+  Goal: "#9b59b6",
+  Preference: "#e84393",
+  Education: "#34a853",
+  Task: "#1abc9c",
+  Event: "#e67e22",
   Document: "#e84393",
-  Event: "#34a853",
-  Code: "#f0f0f0",
-  Chat: "#25d366",
+  Custom: "#A142F4",
   Email: "#ea4335",
+  Meeting: "#f0a500",
+  Code: "#f0f0f0",
+  Chat: "#25d366"
 };
 
 const memoryTypeColors: Record<string, string> = {
@@ -63,140 +79,121 @@ const memoryTypeColors: Record<string, string> = {
   custom: "#A142F4",
 };
 
-/* ──────────────── Force Simulation ──────────────── */
-
-function initNodesFromAPI(apiNodes: APIGraphNode[], width: number, height: number): GraphNode[] {
-  const cx = width / 2;
-  const cy = height / 2;
-  return apiNodes.map((n, i) => {
-    const angle = (i / apiNodes.length) * Math.PI * 2;
-    const dist = i === 0 ? 0 : 140 + Math.random() * 80;
-    return {
-      ...n,
-      x: cx + Math.cos(angle) * dist,
-      y: cy + Math.sin(angle) * dist,
-      vx: 0,
-      vy: 0,
-    };
-  });
-}
-
-function simulate(nodes: GraphNode[], edgeList: GraphEdge[], width: number, height: number) {
-  const cx = width / 2;
-  const cy = height / 2;
-
-  // Repulsion between all nodes
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
-      const dx = nodes[j].x - nodes[i].x;
-      const dy = nodes[j].y - nodes[i].y;
-      const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-      const force = 3000 / (dist * dist);
-      const fx = (dx / dist) * force;
-      const fy = (dy / dist) * force;
-      nodes[i].vx -= fx;
-      nodes[i].vy -= fy;
-      nodes[j].vx += fx;
-      nodes[j].vy += fy;
-    }
-  }
-
-  // Attraction along edges
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  for (const edge of edgeList) {
-    const a = nodeMap.get(edge.source);
-    const b = nodeMap.get(edge.target);
-    if (!a || !b) continue;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-    const force = (dist - 180) * 0.004;
-    const fx = (dx / dist) * force;
-    const fy = (dy / dist) * force;
-    a.vx += fx;
-    a.vy += fy;
-    b.vx -= fx;
-    b.vy -= fy;
-  }
-
-  // Center gravity
-  for (const node of nodes) {
-    node.vx += (cx - node.x) * 0.001;
-    node.vy += (cy - node.y) * 0.001;
-  }
-
-  // Apply velocity with damping
-  for (const node of nodes) {
-    node.vx *= 0.85;
-    node.vy *= 0.85;
-    node.x += node.vx;
-    node.y += node.vy;
-    // Bounds
-    node.x = Math.max(node.radius + 10, Math.min(width - node.radius - 10, node.x));
-    node.y = Math.max(node.radius + 10, Math.min(height - node.radius - 10, node.y));
-  }
-}
-
-/* ──────────────── Component ──────────────── */
-
-const detailIcons: Record<string, React.ElementType> = {
-  Person: User,
-  Project: FolderOpen,
-  Meeting: Calendar,
-  Document: FileText,
-  Commit: GitCommit,
-  Email: Mail,
-  Chat: MessageSquare,
-  Idea: Lightbulb,
-  Event: Lightbulb,
+// Custom Node Component
+const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
+  return (
+    <div
+      className={`px-4 py-2 rounded-xl shadow-lg transition-all duration-200 border-2 ${
+        selected ? "scale-110 z-50" : "hover:scale-105"
+      }`}
+      style={{
+        backgroundColor: data.color,
+        borderColor: selected ? "white" : "transparent",
+        color: "white",
+        minWidth: "120px",
+        textAlign: "center",
+      }}
+    >
+      <Handle type="target" position={Position.Top} className="!bg-white" />
+      <div className="font-semibold text-sm">{data.label}</div>
+      <div className="text-[10px] opacity-80">{data.type}</div>
+      <Handle type="source" position={Position.Bottom} className="!bg-white" />
+    </div>
+  );
 };
 
-export default function MemoryGraphPage() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const nodesRef = useRef<GraphNode[]>([]);
-  const edgesRef = useRef<GraphEdge[]>([]);
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [graphData, setGraphData] = useState<MemoryGraphData | null>(null);
+const nodeTypes = {
+  custom: CustomNode,
+};
+
+const MemoryGraphPageContent = () => {
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [memoriesLoading, setMemoriesLoading] = useState(true);
   const [memories, setMemories] = useState<Memory[]>([]);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const animRef = useRef<number>(0);
-  const dragRef = useRef<{ node: GraphNode | null; offsetX: number; offsetY: number }>({
-    node: null,
-    offsetX: 0,
-    offsetY: 0,
-  });
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Initialize size
-  useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({ width: rect.width, height: rect.height });
-      }
-    };
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
-  }, []);
+  // Function to convert API data to ReactFlow nodes and edges
+  const convertToReactFlow = (
+    apiNodes: APIGraphNode[],
+    apiEdges: APIGraphEdge[]
+  ): { nodes: Node[]; edges: Edge[] } => {
+    const rfNodes: Node[] = apiNodes.map((node, index) => ({
+      id: node.id,
+      type: "custom",
+      position: {
+        x: 100 + index * 150 + Math.random() * 50,
+        y: 100 + Math.random() * 200,
+      },
+      data: {
+        ...node,
+      },
+    }));
 
-  // Fetch graph data from backend
-  useEffect(() => {
-    const fetchGraph = async () => {
-      try {
-        const data = await getMemoryGraph();
-        setGraphData(data);
-        edgesRef.current = data.edges;
-        setLoading(false);
-      } catch (err) {
-        console.error("Failed to fetch memory graph:", err);
-        setLoading(false);
+    const rfEdges: Edge[] = apiEdges.map((edge, index) => ({
+      id: `edge-${index}`,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+      animated: true,
+      markerEnd: { type: MarkerType.ArrowClosed, color: "#8b5cf6" },
+      style: { stroke: "#8b5cf6", strokeWidth: 2 },
+    }));
+
+    return { nodes: rfNodes, edges: rfEdges };
+  };
+
+  // Fetch graph data
+  const loadFullGraph = useCallback(async () => {
+    try {
+      const data = await getMemoryGraph();
+      const { nodes: rfNodes, edges: rfEdges } = convertToReactFlow(
+        data.nodes,
+        data.edges
+      );
+      setNodes(rfNodes);
+      setEdges(rfEdges);
+      if (rfNodes.length > 0) {
+        setSelectedNodeId(rfNodes[0].id);
       }
-    };
-    fetchGraph();
-  }, []);
+    } catch (err) {
+      console.error("Failed to fetch memory graph:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [setNodes, setEdges]);
+
+  // Search for related memories
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) {
+      loadFullGraph();
+      return;
+    }
+    try {
+      const data = await getRelatedMemories(searchQuery);
+      const { nodes: rfNodes, edges: rfEdges } = convertToReactFlow(
+        data.nodes,
+        data.edges
+      );
+      setNodes(rfNodes);
+      setEdges(rfEdges);
+      if (rfNodes.length > 0) {
+        setSelectedNodeId(rfNodes[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to search memories:", err);
+    }
+  }, [searchQuery, loadFullGraph, setNodes, setEdges]);
+
+  // Initialize size and fetch graph
+  useEffect(() => {
+    loadFullGraph();
+  }, [loadFullGraph]);
 
   // Fetch memories
   useEffect(() => {
@@ -204,186 +201,34 @@ export default function MemoryGraphPage() {
       try {
         const data = await getMemories();
         setMemories(data.memories);
-        setMemoriesLoading(false);
       } catch (err) {
         console.error("Failed to fetch memories:", err);
+      } finally {
         setMemoriesLoading(false);
       }
     };
     fetchMemories();
   }, []);
 
-  // Initialize nodes when dimensions or graph data change
-  useEffect(() => {
-    if (graphData && graphData.nodes.length > 0) {
-      nodesRef.current = initNodesFromAPI(graphData.nodes, dimensions.width, dimensions.height);
-      // Default select the central node (first node)
-      setSelectedNode(nodesRef.current[0]);
-    }
-  }, [dimensions, graphData]);
-
-  // Draw loop
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = dimensions.width * dpr;
-    canvas.height = dimensions.height * dpr;
-    ctx.scale(dpr, dpr);
-
-    const nodes = nodesRef.current;
-    const edges = edgesRef.current;
-    if (!nodes || nodes.length === 0 || !edges) return;
-    simulate(nodes, edges, dimensions.width, dimensions.height);
-
-    // Clear
-    ctx.clearRect(0, 0, dimensions.width, dimensions.height);
-
-    // Draw edges
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-    for (const edge of edges) {
-      const a = nodeMap.get(edge.source);
-      const b = nodeMap.get(edge.target);
-      if (!a || !b) continue;
-
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = "rgba(108,92,231,0.2)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Edge label
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-      ctx.font = "9px Inter, sans-serif";
-      ctx.fillStyle = "rgba(136,136,170,0.6)";
-      ctx.textAlign = "center";
-      ctx.fillText(edge.label, mx, my - 4);
-    }
-
-    // Draw nodes
-    for (const node of nodes) {
-      const isSelected = selectedNode?.id === node.id;
-
-      // Glow
-      if (isSelected) {
-        const glow = ctx.createRadialGradient(
-          node.x, node.y, node.radius * 0.5,
-          node.x, node.y, node.radius * 2
-        );
-        glow.addColorStop(0, node.color + "40");
-        glow.addColorStop(1, "transparent");
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius * 2, 0, Math.PI * 2);
-        ctx.fillStyle = glow;
-        ctx.fill();
-      }
-
-      // Node circle
-      const gradient = ctx.createRadialGradient(
-        node.x - node.radius * 0.3,
-        node.y - node.radius * 0.3,
-        node.radius * 0.1,
-        node.x,
-        node.y,
-        node.radius
-      );
-      gradient.addColorStop(0, node.color + "cc");
-      gradient.addColorStop(1, node.color + "55");
-
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-      ctx.fillStyle = gradient;
-      ctx.fill();
-
-      // Border
-      ctx.strokeStyle = isSelected ? node.color : node.color + "44";
-      ctx.lineWidth = isSelected ? 2.5 : 1;
-      ctx.stroke();
-
-      // Label
-      const lines = node.label.split("\n");
-      ctx.font = `${node.radius > 35 ? "bold 11" : "10"}px Inter, sans-serif`;
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      lines.forEach((line, li) => {
-        const yOffset = (li - (lines.length - 1) / 2) * 13;
-        ctx.fillText(line, node.x, node.y + yOffset);
-      });
-    }
-
-    animRef.current = requestAnimationFrame(draw);
-  }, [dimensions, selectedNode]);
-
-  useEffect(() => {
-    animRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [draw]);
-
-  // Mouse interaction
-  const getNodeAt = (mx: number, my: number): GraphNode | null => {
-    for (let i = nodesRef.current.length - 1; i >= 0; i--) {
-      const n = nodesRef.current[i];
-      const dx = mx - n.x;
-      const dy = my - n.y;
-      if (dx * dx + dy * dy <= n.radius * n.radius) return n;
-    }
-    return null;
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const node = getNodeAt(mx, my);
-    if (node) {
-      dragRef.current = { node, offsetX: mx - node.x, offsetY: my - node.y };
-      setSelectedNode(node);
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect || !dragRef.current.node) return;
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    dragRef.current.node.x = mx - dragRef.current.offsetX;
-    dragRef.current.node.y = my - dragRef.current.offsetY;
-    dragRef.current.node.vx = 0;
-    dragRef.current.node.vy = 0;
-  };
-
-  const handleMouseUp = () => {
-    dragRef.current.node = null;
-  };
-
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const node = getNodeAt(mx, my);
-    if (node) setSelectedNode(node);
-  };
-
+  // Delete memory handler
   const handleDeleteMemory = async (memoryId: string) => {
     try {
       await deleteMemory(memoryId);
-      setMemories(prev => prev.filter(m => m.id !== memoryId));
+      setMemories((prev) => prev.filter((m) => m.id !== memoryId));
     } catch (err) {
       console.error("Failed to delete memory:", err);
     }
   };
 
-  const DetailIcon = selectedNode
-    ? detailIcons[selectedNode.type || selectedNode.category] || FolderOpen
-    : FolderOpen;
+  // Find selected node details
+  const selectedNode = useMemo(() => {
+    return nodes.find((n) => n.id === selectedNodeId)?.data as any;
+  }, [nodes, selectedNodeId]);
+
+  // Node click handler
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+  }, []);
 
   return (
     <AppLayout>
@@ -392,28 +237,46 @@ export default function MemoryGraphPage() {
         <div className="flex-1 flex flex-col">
           {/* Header */}
           <div
-            className="flex items-center justify-between px-8 py-5"
+            className="flex items-center justify-between px-8 py-5 gap-4"
             style={{ borderBottom: "1px solid var(--border)" }}
           >
             <div>
               <h1 className="text-xl font-bold text-white">Memory Graph</h1>
               <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                Visualize connections between people, projects, documents and events
+                Intelligent knowledge graph of your memories and documents
               </p>
             </div>
             <div className="flex items-center gap-3">
+              {/* Search */}
+              <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-muted)" }} />
+                <input
+                  type="text"
+                  placeholder="Search entities..."
+                  className="w-full pl-10 pr-10 py-2 rounded-xl text-sm"
+                  style={{
+                    backgroundColor: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      loadFullGraph();
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-white/10 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
+                  </button>
+                )}
+              </form>
               <button
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all hover:scale-[1.03]"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-secondary)",
-                }}
-              >
-                <Filter size={14} />
-                Filters
-              </button>
-              <button
+                onClick={loadFullGraph}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all hover:scale-[1.03]"
                 style={{
                   background: "var(--bg-card)",
@@ -422,51 +285,38 @@ export default function MemoryGraphPage() {
                 }}
               >
                 <Maximize2 size={14} />
-                Fit View
+                Reset View
               </button>
             </div>
           </div>
 
-          {/* Canvas */}
-          <div ref={containerRef} className="flex-1 relative overflow-hidden">
+          {/* React Flow Canvas */}
+          <div ref={reactFlowWrapper} className="flex-1 relative overflow-hidden">
             {loading ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 size={48} className="animate-spin" style={{ color: "var(--accent)" }} />
               </div>
             ) : (
-              <canvas
-                ref={canvasRef}
-                className="absolute inset-0 cursor-grab active:cursor-grabbing"
-                style={{ width: "100%", height: "100%" }}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onClick={handleClick}
-              />
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onInit={setReactFlowInstance}
+                onNodeClick={onNodeClick}
+                nodeTypes={nodeTypes}
+                fitView
+                className="bg-[#0a0a1a]"
+              >
+                <Background color="#4c1d95" gap={20} />
+                <Controls style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text-primary)" }} />
+                <MiniMap
+                  nodeStrokeColor={(n) => (n.data as any).color || "#888"}
+                  nodeColor={(n) => (n.data as any).color || "#888"}
+                  style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
+                />
+              </ReactFlow>
             )}
-
-            {/* Category Legend */}
-            <div
-              className="absolute bottom-6 left-6 flex gap-3 px-4 py-2.5 rounded-xl"
-              style={{
-                background: "rgba(10,10,24,0.85)",
-                border: "1px solid var(--border)",
-                backdropFilter: "blur(8px)",
-              }}
-            >
-              {Object.entries(categories).map(([cat, color]) => (
-                <div key={cat} className="flex items-center gap-1.5">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ background: color }}
-                  />
-                  <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
-                    {cat}
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -488,24 +338,28 @@ export default function MemoryGraphPage() {
             {selectedNode ? (
               <div>
                 {/* Node Identity */}
-                <div className="flex items-center gap-3 mb-5">
+                <div
+                  className="flex items-center gap-3 p-4 rounded-xl mb-5"
+                  style={{
+                    backgroundColor: selectedNode.color + "22",
+                    border: `1px solid ${selectedNode.color}`,
+                  }}
+                >
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center"
-                    style={{ background: selectedNode.color + "22" }}
+                    style={{ backgroundColor: selectedNode.color }}
                   >
-                    <DetailIcon size={20} style={{ color: selectedNode.color }} />
+                    <User size={20} color="white" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-white">
-                      {selectedNode.label.replace("\n", " ")}
-                    </p>
+                    <p className="text-sm font-bold text-white">{selectedNode.label.replace("\n", " ")}</p>
                     <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
                       Type: {selectedNode.type || selectedNode.category}
                     </p>
                   </div>
                 </div>
 
-                {/* Details */}
+                {/* Description */}
                 {selectedNode.description && (
                   <div className="mb-5">
                     <p
@@ -539,7 +393,7 @@ export default function MemoryGraphPage() {
                 )}
 
                 {/* Connected To */}
-                {selectedNode.connections && (
+                {selectedNode.connections && selectedNode.connections.length > 0 && (
                   <div>
                     <p
                       className="text-[10px] font-semibold uppercase tracking-wider mb-3"
@@ -548,7 +402,7 @@ export default function MemoryGraphPage() {
                       Connected To ({selectedNode.connections.length})
                     </p>
                     <div className="space-y-2">
-                      {selectedNode.connections.map((conn, i) => (
+                      {selectedNode.connections.slice(0, 10).map((conn: string, i: number) => (
                         <div
                           key={i}
                           className="card px-3 py-2.5 flex items-center gap-2.5 cursor-pointer"
@@ -556,21 +410,13 @@ export default function MemoryGraphPage() {
                           <div
                             className="w-2 h-2 rounded-full"
                             style={{
-                              background:
-                                Object.values(categories)[
-                                  i % Object.values(categories).length
-                                ],
+                              backgroundColor:
+                                Object.values(categories)[i % Object.values(categories).length],
                             }}
                           />
                           <p className="text-xs text-white">{conn}</p>
                         </div>
                       ))}
-                      <button
-                        className="text-[11px] font-medium mt-2"
-                        style={{ color: "var(--accent)" }}
-                      >
-                        +2 more
-                      </button>
                     </div>
                   </div>
                 )}
@@ -594,8 +440,8 @@ export default function MemoryGraphPage() {
                 No memories extracted yet. Chat to create some!
               </p>
             ) : (
-              <div className="space-y-3">
-                {memories.map(memory => (
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                {memories.map((memory) => (
                   <div
                     key={memory.id}
                     className="card p-3 flex flex-col gap-2"
@@ -604,7 +450,7 @@ export default function MemoryGraphPage() {
                       <div className="flex items-center gap-2">
                         <div
                           className="w-2 h-2 rounded-full"
-                          style={{ background: memoryTypeColors[memory.type] || "#A142F4" }}
+                          style={{ backgroundColor: memoryTypeColors[memory.type] || "#A142F4" }}
                         />
                         <span className="text-[10px] font-semibold uppercase" style={{ color: "var(--text-muted)" }}>
                           {memory.type}
@@ -635,4 +481,14 @@ export default function MemoryGraphPage() {
       </div>
     </AppLayout>
   );
-}
+};
+
+const MemoryGraphPage = () => {
+  return (
+    <ReactFlowProvider>
+      <MemoryGraphPageContent />
+    </ReactFlowProvider>
+  );
+};
+
+export default MemoryGraphPage;

@@ -2,48 +2,39 @@
 
 import AppLayout from "@/components/layout/AppLayout";
 import { motion } from "framer-motion";
-import { Clock, ArrowRight } from "lucide-react";
-
-const timelineEvents = [
-  {
-    date: "18 Jan 2024",
-    title: "WhatsApp Discussion",
-    desc: "Team discussed final demo preparations",
-    color: "#25d366",
-  },
-  {
-    date: "15 Jan 2024",
-    title: "Final Report Submitted",
-    desc: "PDF report uploaded to Google Drive",
-    color: "#e84393",
-  },
-  {
-    date: "13 Jan 2024",
-    title: "GitHub Commit: Add AI Module",
-    desc: "Pushed AI integration code to SilentGuard repo",
-    color: "#f0f0f0",
-  },
-  {
-    date: "12 Jan 2024",
-    title: "Meeting with Prof. Sharma",
-    desc: "Discussed AI integration into emergency detection module",
-    color: "#f0a500",
-  },
-  {
-    date: "10 Jan 2024",
-    title: "SilentGuard Project Created",
-    desc: "Repository initialized and first commit pushed",
-    color: "#00d68f",
-  },
-  {
-    date: "8 Jan 2024",
-    title: "Hackathon Registration",
-    desc: "Team registered for the hackathon event",
-    color: "#6c5ce7",
-  },
-];
+import { Clock, ArrowRight, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { getTimeline, TimelineResponse } from "@/lib/api";
 
 export default function TimelinePage() {
+  const [timelineData, setTimelineData] = useState<TimelineResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const data = await getTimeline();
+        setTimelineData(data);
+      } catch (e) {
+        console.error("Failed to fetch timeline", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Flatten events with date
+  const allEvents: Array<{ date: string; event: any }> = [];
+  if (timelineData) {
+    for (const date of Object.keys(timelineData.events_by_date)) {
+      for (const event of timelineData.events_by_date[date]) {
+        allEvents.push({ date, event });
+      }
+    }
+  }
+
   return (
     <AppLayout>
       <div className="p-8 max-w-[900px] mx-auto">
@@ -67,47 +58,57 @@ export default function TimelinePage() {
             style={{ background: "var(--border)" }}
           />
 
-          <div className="space-y-6">
-            {timelineEvents.map((event, i) => (
-              <motion.div
-                key={i}
-                className="relative flex gap-6 items-start pl-14"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1, duration: 0.4 }}
-              >
-                {/* Dot on timeline */}
-                <div
-                  className="absolute left-[18px] w-4 h-4 rounded-full border-2 z-10"
-                  style={{
-                    borderColor: event.color,
-                    background: "var(--bg-primary)",
-                    boxShadow: `0 0 10px ${event.color}44`,
-                  }}
-                />
+          {loading ? (
+            <div className="flex items-center justify-center p-10">
+              <Loader2 className="w-6 h-6 animate-spin" style={{ color: "var(--accent)" }} />
+            </div>
+          ) : allEvents.length === 0 ? (
+            <div className="text-center p-10" style={{ color: "var(--text-muted)" }}>
+              No events yet — start using EVOLVE AI!
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {allEvents.map(({ date, event }, i) => (
+                <motion.div
+                  key={event.id}
+                  className="relative flex gap-6 items-start pl-14"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.1, duration: 0.4 }}
+                >
+                  {/* Dot on timeline */}
+                  <div
+                    className="absolute left-[18px] w-4 h-4 rounded-full border-2 z-10"
+                    style={{
+                      borderColor: event.color,
+                      background: "var(--bg-primary)",
+                      boxShadow: `0 0 10px ${event.color}44`,
+                    }}
+                  />
 
-                {/* Card */}
-                <div className="card p-5 flex-1 cursor-pointer">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock size={12} style={{ color: "var(--text-muted)" }} />
-                    <span className="text-[11px] font-medium" style={{ color: event.color }}>
-                      {event.date}
-                    </span>
+                  {/* Card */}
+                  <div className="card p-5 flex-1 cursor-pointer">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock size={12} style={{ color: "var(--text-muted)" }} />
+                      <span className="text-[11px] font-medium" style={{ color: event.color }}>
+                        {date}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-semibold text-white">{event.title}</h3>
+                    <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                      {event.description}
+                    </p>
+                    <button
+                      className="flex items-center gap-1 mt-3 text-[11px] font-medium"
+                      style={{ color: "var(--accent)" }}
+                    >
+                      View details <ArrowRight size={11} />
+                    </button>
                   </div>
-                  <h3 className="text-sm font-semibold text-white">{event.title}</h3>
-                  <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                    {event.desc}
-                  </p>
-                  <button
-                    className="flex items-center gap-1 mt-3 text-[11px] font-medium"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    View details <ArrowRight size={11} />
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>

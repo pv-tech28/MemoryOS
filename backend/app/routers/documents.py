@@ -14,6 +14,8 @@ from app.services.pdf_parser import parse_pdf
 from app.services.chunker import chunk_document_pages
 from app.services.embeddings import embed_texts
 from app.services.vector_store import add_document, delete_document as vs_delete
+from app.services.memory_graph_builder import get_graph_service, EntityNode
+from app.services.timeline_service import add_timeline_event
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -48,7 +50,7 @@ def _save_metadata(metadata: dict):
 @router.post("/upload", response_model=UploadResponse)
 async def upload_document(file: UploadFile = File(...)):
     """
-    Upload a PDF file, parse it, generate embeddings, and store in ChromaDB.
+    Upload a PDF file, parse it, generate embeddings, store in vector DB, and extract entities to knowledge graph.
     """
     # Validate file type
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -72,6 +74,9 @@ async def upload_document(file: UploadFile = File(...)):
         # 1. Parse PDF
         print(f"[Upload] Parsing PDF: {file.filename}")
         parsed = parse_pdf(file_path)
+        
+        # Collect all text for entity extraction
+        full_text = "\n".join([p.text for p in parsed.pages if p.text.strip()])
 
         # 2. Chunk the document
         print(f"[Upload] Chunking {parsed.page_count} pages...")
@@ -89,8 +94,8 @@ async def upload_document(file: UploadFile = File(...)):
         print(f"[Upload] Generating embeddings for {len(chunk_texts)} chunks...")
         embeddings = embed_texts(chunk_texts)
 
-        # 4. Store in ChromaDB
-        print(f"[Upload] Storing in ChromaDB...")
+        # 4. Store in vector DB
+        print(f"[Upload] Storing in vector DB...")
         metadatas = [
             {
                 "document_name": file.filename,
@@ -115,6 +120,43 @@ async def upload_document(file: UploadFile = File(...)):
             "metadata": parsed.metadata,
         }
         _save_metadata(all_metadata)
+        
+        # 6. Add to knowledge graph with enhanced document node
+        print(f"[Upload] Extracting entities and adding to knowledge graph...")
+        graph_service = get_graph_service()
+        
+        # Generate a short summary (first 200 chars of full text, for example)
+        summary = full_text[:500].strip()
+        if len(full_text) > 500:
+            summary += "..."
+        
+        doc_node = EntityNode(
+            name=file.filename,
+            type="Document",
+            description=summary,
+            metadata={
+                "uploaded_at": datetime.now().isoformat(),
+                "page_count": parsed.page_count,
+                "chunk_count": len(chunks),
+                "doc_id": doc_id,
+                "title": parsed.metadata.get("title", ""),
+                "author": parsed.metadata.get("author", ""),
+                "file_size": len(content)
+            }
+        )
+        graph_service.process_text(
+            text=full_text,
+            source_node=doc_node,
+            context={"type": "document", "source": "upload"}
+        )
+
+        # Add timeline event
+        add_timeline_event(
+            title=f"PDF Uploaded: {file.filename}",
+            description=f"Successfully processed {parsed.page_count} pages into {len(chunks)} chunks.",
+            event_type="pdf_upload",
+            related_document=doc_id
+        )
 
         print(f"[Upload] Document '{file.filename}' processed successfully! "
               f"({parsed.page_count} pages, {len(chunks)} chunks)")

@@ -9,7 +9,13 @@ from typing import Optional, List, Dict, Any
 from google import genai
 from .memory_store import (
     create_memory,
-    get_relevant_memories
+    get_relevant_memories,
+    find_existing_memory,
+    update_memory,
+    increment_access
+)
+from .memory_graph_builder import (
+    update_graph_from_memory
 )
 
 # Initialize Gemini client (reusing same config from rag_engine)
@@ -110,14 +116,42 @@ def extract_memories(
 
             importance = memory_obj.get("importance", 0.5)
             if importance >= importance_threshold:
-                memory_id = create_memory(
-                    chat_id=chat_id,
-                    memory_type=memory_obj["type"],
+                # Check for existing memory
+                existing = find_existing_memory(
                     memory_text=memory_obj["memory"],
-                    importance=importance,
+                    memory_type=memory_obj["type"],
                     user_id=user_id
                 )
-                stored_ids.append(memory_id)
+
+                if existing:
+                    # Update existing memory: keep text, boost importance
+                    new_importance = min(1.0, existing["importance"] + 0.1)
+                    update_memory(
+                        memory_id=existing["id"],
+                        memory_text=memory_obj["memory"],  # Use latest version
+                        importance=new_importance,
+                        memory_type=memory_obj["type"]
+                    )
+                    stored_ids.append(existing["id"])
+                else:
+                    # Create new memory
+                    memory_id = create_memory(
+                        chat_id=chat_id,
+                        memory_type=memory_obj["type"],
+                        memory_text=memory_obj["memory"],
+                        importance=importance,
+                        user_id=user_id
+                    )
+                    stored_ids.append(memory_id)
+                
+                # Update memory graph (for both new and updated memories)
+                try:
+                    update_graph_from_memory(
+                        memory_text=memory_obj["memory"],
+                        memory_type=memory_obj["type"]
+                    )
+                except Exception as e:
+                    print(f"[MemoryExtractor] Error updating graph: {e}")
 
         return stored_ids
 

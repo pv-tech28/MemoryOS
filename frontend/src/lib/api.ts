@@ -166,6 +166,19 @@ export async function getMemoryGraph(): Promise<MemoryGraphData> {
   return res.json();
 }
 
+export async function getRelatedMemories(
+  entity: string,
+  type?: string
+): Promise<MemoryGraphData> {
+  let url = `${API_BASE}/memory-graph/related?entity=${encodeURIComponent(entity)}`;
+  if (type) {
+    url += `&type=${encodeURIComponent(type)}`;
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch related memories");
+  return res.json();
+}
+
 /* ─── Authentication ─── */
 
 export async function loginWithGoogle(): Promise<void> {
@@ -241,4 +254,29 @@ export async function deleteMemory(memoryId: string): Promise<void> {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete memory");
+}
+
+/* ─── Timeline ─── */
+
+export interface TimelineEvent {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  event_type: string;
+  icon?: string;
+  color?: string;
+  related_document?: string;
+  related_memory?: string;
+  related_graph_node?: string;
+}
+
+export interface TimelineResponse {
+  events_by_date: Record<string, TimelineEvent[]>;
+}
+
+export async function getTimeline(limit: number = 100): Promise<TimelineResponse> {
+  const res = await fetch(`${API_BASE}/timeline?limit=${limit}`);
+  if (!res.ok) throw new Error("Failed to fetch timeline");
+  return res.json();
 }

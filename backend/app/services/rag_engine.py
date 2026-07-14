@@ -1,7 +1,7 @@
 
 """
 RAG Engine Service
-Retrieval-Augmented Generation pipeline using ChromaDB + Google Gemini.
+Retrieval-Augmented Generation pipeline using ChromaDB + Google Gemini + Memory Intelligence Layer.
 """
 
 import os
@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from app.services.embeddings import embed_query
 from app.services.vector_store import search as vector_search
 from app.services.memory_store import get_relevant_memories
+from app.services.memory_intelligence import get_personalized_context, build_memory_intelligence_prompt
 
 load_dotenv()
 
@@ -113,39 +114,40 @@ def query(
     chat_id: str | None = None
 ) -> dict:
     """
-    Full RAG pipeline with long-term memories, conversation history, and context.
+    Full RAG pipeline with Memory Intelligence Layer,
+    including long-term memories, knowledge graph, conversation history, and context.
     """
     start_time = time.time()
     if chat_history is None:
         chat_history = []
 
-    # 1. Retrieve relevant long-term memories
-    relevant_memories = get_relevant_memories(
-        query_text=question,
-        chat_id=chat_id,
-        limit=10,
-        min_importance=0.3
+    # 1. Retrieve personalized context via Memory Intelligence Layer
+    memory_context = get_personalized_context(
+        question=question,
+        chat_id=chat_id
     )
 
-    # 2. Embed the question and search for documents
-    query_embedding = embed_query(question)
-    search_results = vector_search(
-        query_embedding=query_embedding,
-        doc_id=document_id,
-        top_k=top_k,
-    )
+    # 2. If specific document ID provided, add those results too
+    search_results = memory_context["search_results"]
+    if document_id:
+        query_embedding = embed_query(question)
+        search_results = vector_search(
+            query_embedding=query_embedding,
+            doc_id=document_id,
+            top_k=top_k,
+        )
 
     # 3. Build full prompt
-    memories_prompt = build_relevant_memories_prompt(relevant_memories)
+    memory_intel_prompt = build_memory_intelligence_prompt(memory_context)
     history_prompt = build_conversation_history_prompt(chat_history)
     context_prompt = build_context_prompt(question, search_results)
 
     final_prompt = ""
-    if memories_prompt:
-        final_prompt += memories_prompt + "\n\n"
+    if memory_intel_prompt:
+        final_prompt += memory_intel_prompt + "\n\n"
     if history_prompt:
         final_prompt += history_prompt + "\n\n"
-    final_prompt += context_prompt
+    final_prompt += f"USER'S QUESTION:\n{question}\n\nAnswer using all the context above. End with [CONFIDENCE: X.X]"
 
     # 4. Query Gemini
     try:
@@ -187,6 +189,50 @@ def query(
             "document_name": result["metadata"].get("document_name", "Unknown"),
         })
 
+    # Get related entities and IDs
+    related_entities = []
+    graph_node_ids = []
+    from app.services.memory_graph_builder import get_graph_service
+    graph_service = get_graph_service()
+    for node in memory_context.get("related_graph_nodes", []):
+        related_entities.append({
+            "name": node["name"],
+            "type": node["type"]
+        })
+        graph_node_ids.append(node["id"])
+        # Increment importance of related nodes
+        graph_service.increment_node_importance(node["id"])
+    
+    memory_ids = [mem["id"] for mem in memory_context.get("memories", [])]
+
+    # Load metadata to categorize sources
+    import os
+    import json
+    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
+    METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
+    all_metadata = {}
+    try:
+        with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
+            all_metadata = json.load(f)
+    except:
+        pass
+
+    # Categorize related sources
+    related_documents = []
+    related_emails = []
+    related_calendar_events = []
+    for result in search_results:
+        doc_id = result["metadata"].get("doc_id")
+        if doc_id and doc_id in all_metadata:
+            doc = all_metadata[doc_id]
+            source = doc.get("source")
+            if source == "gmail":
+                related_emails.append(doc)
+            elif source == "calendar":
+                related_calendar_events.append(doc)
+            else:
+                related_documents.append(doc)
+
     # Get the primary document name
     doc_name = search_results[0]["metadata"].get("document_name", "Document") if search_results else "N/A"
 
@@ -199,4 +245,10 @@ def query(
         "confidence": confidence,
         "document_name": doc_name,
         "processing_time": processing_time,
+        "related_entities": related_entities,
+        "graph_node_ids": graph_node_ids,
+        "memory_ids": memory_ids,
+        "related_documents": related_documents,
+        "related_emails": related_emails,
+        "related_calendar_events": related_calendar_events,
     }

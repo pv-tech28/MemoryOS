@@ -17,6 +17,10 @@ from ..services.pdf_parser import extract_text_from_pdf_bytes
 from ..services.chunker import chunk_text
 from ..services.embeddings import embed_texts
 from ..services.vector_store import add_document
+from ..services.memory_graph_builder import (
+    get_graph_service,
+    EntityNode
+)
 
 load_dotenv()
 
@@ -66,12 +70,13 @@ def get_google_credentials() -> Credentials:
 
 @router.post("/gmail/sync")
 async def sync_gmail():
-    """Sync emails from Gmail to our vector DB."""
+    """Sync emails from Gmail to our vector DB and knowledge graph."""
     try:
         creds = get_google_credentials()
         service = build("gmail", "v1", credentials=creds)
         results = service.users().messages().list(userId="me", maxResults=10).execute()
         messages = results.get("messages", [])
+        graph_service = get_graph_service()
         
         for msg in messages:
             msg_data = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
@@ -132,6 +137,27 @@ async def sync_gmail():
                 "metadata": {}
             }
             save_metadata(metadata)
+            
+            # Add to knowledge graph with enhanced email node
+            recipients = next((h["value"] for h in headers if h["name"] == "To"), "")
+            email_node = EntityNode(
+                name=f"Email - {subject}",
+                type="Email",
+                description=f"From: {from_addr}\nTo: {recipients}\nDate: {date}",
+                metadata={
+                    "source": "gmail",
+                    "subject": subject,
+                    "from": from_addr,
+                    "to": recipients,
+                    "date": date,
+                    "msg_id": msg["id"]
+                }
+            )
+            graph_service.process_text(
+                text=content,
+                source_node=email_node,
+                context={"type": "email", "source": "gmail", "msg_id": msg["id"]}
+            )
         
         return {"status": "success", "message": f"Synced {len(messages)} emails from Gmail"}
     except Exception as e:
@@ -142,12 +168,13 @@ async def sync_gmail():
 
 @router.post("/drive/sync")
 async def sync_drive():
-    """Sync documents from Google Drive to our vector DB."""
+    """Sync documents from Google Drive to our vector DB and knowledge graph."""
     try:
         creds = get_google_credentials()
         service = build("drive", "v3", credentials=creds)
         results = service.files().list(pageSize=10, fields="files(id, name, mimeType, createdTime, size)").execute()
         files = results.get("files", [])
+        graph_service = get_graph_service()
         
         for file in files:
             if file["mimeType"] == "application/pdf":
@@ -191,6 +218,25 @@ async def sync_drive():
                     "metadata": {}
                 }
                 save_metadata(metadata)
+                
+                # Add to knowledge graph with enhanced drive document node
+                doc_node = EntityNode(
+                    name=file["name"],
+                    type="Document",
+                    description=f"Document from Google Drive\nMime Type: {file['mimeType']}",
+                    metadata={
+                        "source": "drive",
+                        "name": file["name"],
+                        "mime_type": file["mimeType"],
+                        "drive_id": file["id"],
+                        "created_time": file.get("createdTime", "")
+                    }
+                )
+                graph_service.process_text(
+                    text=text,
+                    source_node=doc_node,
+                    context={"type": "document", "source": "drive", "drive_id": file["id"]}
+                )
         
         return {"status": "success", "message": f"Synced {len(files)} files from Drive"}
     except Exception as e:
@@ -201,7 +247,7 @@ async def sync_drive():
 
 @router.post("/calendar/sync")
 async def sync_calendar():
-    """Sync events from Google Calendar to our vector DB."""
+    """Sync events from Google Calendar to our vector DB and knowledge graph."""
     try:
         creds = get_google_credentials()
         service = build("calendar", "v3", credentials=creds)
@@ -210,6 +256,7 @@ async def sync_calendar():
             calendarId="primary", timeMin=now, maxResults=10, singleEvents=True, orderBy="startTime"
         ).execute()
         events = events_result.get("items", [])
+        graph_service = get_graph_service()
         
         for event in events:
             start = event["start"].get("dateTime", event["start"].get("date"))
@@ -249,6 +296,29 @@ async def sync_calendar():
                 "metadata": {}
             }
             save_metadata(metadata)
+            
+            # Add to knowledge graph with enhanced calendar event node
+            location = event.get("location", "")
+            participants = [attendee.get("email", "") for attendee in event.get("attendees", [])]
+            event_node = EntityNode(
+                name=summary,
+                type="Event",
+                description=f"Calendar event\nStart: {start}\nEnd: {end}\nLocation: {location}",
+                metadata={
+                    "source": "calendar",
+                    "summary": summary,
+                    "start": start,
+                    "end": end,
+                    "location": location,
+                    "participants": participants,
+                    "event_id": event["id"]
+                }
+            )
+            graph_service.process_text(
+                text=content,
+                source_node=event_node,
+                context={"type": "event", "source": "calendar", "event_id": event["id"]}
+            )
         
         return {"status": "success", "message": f"Synced {len(events)} events from Calendar"}
     except Exception as e:

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -56,26 +56,61 @@ class ChatRequest(BaseModel):
     question: str
 
 
+class RelatedEntity(BaseModel):
+    """A related entity from the knowledge graph."""
+    name: str
+    type: str
+
+
 class ChatResponse(BaseModel):
-    """Response from the RAG pipeline."""
+    """Response from the RAG pipeline with Memory Intelligence features."""
     chat_id: str  # Always returned, whether new or existing
     answer: str
     sources: list[SourceReference]
     confidence: float  # 0.0 - 1.0
     document_name: str
     processing_time: float  # seconds
+    related_entities: Optional[List[RelatedEntity]] = None
+    graph_node_ids: Optional[List[str]] = None
+    memory_ids: Optional[List[str]] = None
+    related_documents: Optional[List[dict]] = None
+    related_emails: Optional[List[dict]] = None
+    related_calendar_events: Optional[List[dict]] = None
 
 
 class Memory(BaseModel):
-    """Model representing a long-term memory."""
+    """Model representing a long-term memory with tracking fields."""
     id: str
     chat_id: str
     user_id: str
     type: str
     memory: str
     importance: float
+    recency: Optional[float] = 0.0
+    frequency: Optional[int] = 0
+    last_accessed: Optional[str] = None
+    access_count: Optional[int] = 0
     created_at: str
     updated_at: str
+
+
+class TimelineEvent(BaseModel):
+    """Model for a single timeline event."""
+    id: str
+    title: str
+    description: str
+    timestamp: str
+    event_type: str
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    related_document: Optional[str] = None
+    related_memory: Optional[str] = None
+    related_graph_node: Optional[str] = None
+
+
+class TimelineResponse(BaseModel):
+    """Response model for timeline events grouped by date."""
+    events_by_date: dict[str, list[TimelineEvent]]
 
 
 class MemoryListResponse(BaseModel):
