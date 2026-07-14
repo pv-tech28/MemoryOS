@@ -267,5 +267,15 @@ def delete_memory(memory_id: str) -> bool:
         cursor.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         return cursor.rowcount > 0
 
+
+def get_all_memories(user_id: str = "default") -> List[Dict[str, Any]]:
+    """Get all memories from the database"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM memories WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
 # Initialize the database when this module is imported
 init_db()

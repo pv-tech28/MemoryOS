@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
-from app.routers import documents, chat, memory_graph, auth, sources, memories, timeline
+from app.routers import documents, chat, memory_graph, auth, sources, memories, timeline, dashboard
 
 load_dotenv()
 
@@ -55,6 +55,7 @@ app.include_router(auth.router)
 app.include_router(sources.router)
 app.include_router(memories.router)
 app.include_router(timeline.router)
+app.include_router(dashboard.router)
 
 
 @app.get("/api/health")

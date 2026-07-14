@@ -280,3 +280,26 @@ export async function getTimeline(limit: number = 100): Promise<TimelineResponse
   if (!res.ok) throw new Error("Failed to fetch timeline");
   return res.json();
 }
+
+/* ─── Dashboard ─── */
+
+export interface DashboardStats {
+  total_memories: number;
+  total_documents: number;
+  total_emails: number;
+  total_calendar: number;
+  total_timeline_events: number;
+  total_nodes: number;
+  total_edges: number;
+  today_memories: number;
+  recent_activity: TimelineEvent[];
+  connected_sources: any[];
+  suggested_queries: string[];
+  last_sync: string;
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const res = await fetch(`${API_BASE}/dashboard/stats`);
+  if (!res.ok) throw new Error("Failed to fetch dashboard stats");
+  return res.json();
+}
