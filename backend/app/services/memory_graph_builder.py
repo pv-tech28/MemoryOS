@@ -227,17 +227,12 @@ class GraphService:
         context: Optional[Dict[str, Any]] = None
     ) -> ExtractionResult:
         """
-        Use Gemini to extract entities and relationships from text.
+        Use OpenRouter to extract entities and relationships from text.
         Context is optional metadata like source type, document name, etc.
         """
         import os
-        from google import genai
-        
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            return ExtractionResult()
-        
-        client = genai.Client(api_key=api_key)
+        import traceback
+        from .ai_provider import generate_response
         
         prompt = f"""
         You are an expert at extracting entities and relationships from text for a knowledge graph.
@@ -283,11 +278,12 @@ class GraphService:
         """
         
         try:
-            response = client.models.generate_content(
-                model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
-                contents=prompt
+            text_response = generate_response(
+                prompt=prompt,
+                temperature=0.1,
+                max_tokens=1024
             )
-            text_response = response.text.strip()
+            text_response = text_response.strip()
             # Clean up any markdown
             if text_response.startswith("```json"):
                 text_response = text_response[7:]

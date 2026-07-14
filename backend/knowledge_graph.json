@@ -1,0 +1,38 @@
+{
+  "directed": true,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "id": "a71cfb19-b2c9-4398-a1ca-b140de017023",
+      "name": "User is familiar with Java, including Linear Searc",
+      "type": "Conversation",
+      "description": "User is familiar with Java, including Linear Search and Binary Search Tree (BST) Deletion implementations",
+      "importance": 0.5,
+      "metadata": {},
+      "created_at": "2026-07-14T21:43:29.841103",
+      "updated_at": "2026-07-14T21:43:29.841113"
+    },
+    {
+      "id": "546281af-7f33-45aa-af4f-2d6da2f08ee2",
+      "name": "User understands theoretical concepts like Binary ",
+      "type": "Conversation",
+      "description": "User understands theoretical concepts like Binary Search and Graph Representation using adjacency matrices",
+      "importance": 0.5,
+      "metadata": {},
+      "created_at": "2026-07-14T21:43:38.450218",
+      "updated_at": "2026-07-14T21:43:38.450226"
+    },
+    {
+      "id": "131a69d0-1a2e-4001-8642-7e98fa5366e8",
+      "name": "User receives promotional emails from Dribbble and",
+      "type": "Conversation",
+      "description": "User receives promotional emails from Dribbble and LinkedIn",
+      "importance": 0.5,
+      "metadata": {},
+      "created_at": "2026-07-14T21:43:45.417807",
+      "updated_at": "2026-07-14T21:43:45.417811"
+    }
+  ],
+  "edges": []
+}

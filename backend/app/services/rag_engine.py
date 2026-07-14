@@ -1,43 +1,20 @@
 
 """
 RAG Engine Service
-Retrieval-Augmented Generation pipeline using ChromaDB + Google Gemini + Memory Intelligence Layer.
+Retrieval-Augmented Generation pipeline using ChromaDB + OpenRouter + Memory Intelligence Layer.
 """
 
 import os
 import time
-from google import genai
+import traceback
 from dotenv import load_dotenv
 from app.services.embeddings import embed_query
 from app.services.vector_store import search as vector_search
 from app.services.memory_store import get_relevant_memories
 from app.services.memory_intelligence import get_personalized_context, build_memory_intelligence_prompt
+from app.services.ai_provider import generate_response
 
 load_dotenv()
-
-# Initialize Gemini client
-_gemini_client: genai.Client | None = None
-
-
-def _get_gemini_client() -> genai.Client:
-    """Lazy-initialize the Gemini client."""
-    global _gemini_client
-    if _gemini_client is None:
-        api_key = os.getenv("GEMINI_API_KEY", "")
-        if not api_key or api_key == "your_gemini_api_key_here":
-            raise ValueError(
-                "GEMINI_API_KEY not set. Please add your key to backend/.env\n"
-                "Get one at: https://aistudio.google.com/apikey"
-            )
-        from google.genai import types
-        _gemini_client = genai.Client(
-            api_key=api_key,
-            http_options=types.HttpOptions(
-                timeout=120000,
-                retry_options=types.HttpRetryOptions(attempts=1)
-            )
-        )
-    return _gemini_client
 
 
 SYSTEM_PROMPT = """You are EVOLVE AI, an intelligent memory assistant. Use the provided memories, conversation history, and document context to answer questions.
@@ -149,27 +126,22 @@ def query(
         final_prompt += history_prompt + "\n\n"
     final_prompt += f"USER'S QUESTION:\n{question}\n\nAnswer using all the context above. End with [CONFIDENCE: X.X]"
 
-    # 4. Query Gemini
+    # 4. Query OpenRouter
     try:
-        client = _get_gemini_client()
-        model_name = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
-        response = client.models.generate_content(
-            model=model_name,
-            contents=final_prompt,
-            config=genai.types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.3,
-                max_output_tokens=1024,
-            )
+        raw_answer = generate_response(
+            prompt=final_prompt,
+            system_prompt=SYSTEM_PROMPT,
+            temperature=0.3,
+            max_tokens=1024
         )
-        raw_answer = response.text or "I was unable to generate a response."
+        if not raw_answer:
+            raw_answer = "I was unable to generate a response."
     except Exception as e:
-        import traceback
-        print(f"[RAG] Error querying Gemini: {e}")
+        print(f"[RAG] Error querying OpenRouter: {e}")
         traceback.print_exc()
         # Fallback response
         primary_chunks = search_results[:2]
-        raw_answer = f"⚠️ Gemini API Error: {e}\n\nHere is relevant text from your documents:\n"
+        raw_answer = f"⚠️ OpenRouter API Error: {e}\n\nHere is relevant text from your documents:\n"
         for chunk in primary_chunks:
             p_num = chunk["metadata"].get("page_number")
             raw_answer += f"\n- {'Page ' + str(p_num) if p_num else 'Document'}: {chunk['content'][:150]}..."

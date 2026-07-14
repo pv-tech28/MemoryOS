@@ -12,11 +12,6 @@ from app.routers import documents, chat, memory_graph, auth, sources, memories, 
 
 load_dotenv()
 
-# Debug 9: Verify latest .env key is loaded
-print("[DEBUG] --- Backend Startup Debug ---")
-api_key = os.getenv("GEMINI_API_KEY", "")
-print(f"[DEBUG] GEMINI_API_KEY loaded (first 8 chars): '{api_key[:8]}...'")
-
 app = FastAPI(
     title="EVOLVE AI API",
     description="AI-powered Digital Memory Operating System — Backend API",

@@ -9,5 +9,93 @@
     "related_document": null,
     "related_memory": null,
     "related_graph_node": null
+  },
+  {
+    "id": "0a8038e1-7f6b-4cab-8eee-d6a94f8a4f2f",
+    "title": "Ask EVOLVE: what is this document about??",
+    "description": "AI answered your question in 2.39s.",
+    "timestamp": "2026-07-14T19:12:52.807486",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
+  },
+  {
+    "id": "fc5becb3-074e-4665-abc8-4ddf3f7ea2d8",
+    "title": "Ask EVOLVE: What is this document about?",
+    "description": "AI answered your question in 0.01s.",
+    "timestamp": "2026-07-14T19:20:04.629424",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
+  },
+  {
+    "id": "bd69e97c-3504-4fc1-9cf0-8f3efeb7264e",
+    "title": "Ask EVOLVE: summarize the key points.",
+    "description": "AI answered your question in 2.92s.",
+    "timestamp": "2026-07-14T20:33:05.635766",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
+  },
+  {
+    "id": "919e84d2-a0be-4c07-b19a-77adbd41410c",
+    "title": "Ask EVOLVE: summarize the key points.",
+    "description": "AI answered your question in 0.54s.",
+    "timestamp": "2026-07-14T21:36:50.214909",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
+  },
+  {
+    "id": "e2f47c70-88ea-45eb-80a1-5b6ef5a6b507",
+    "title": "Memory Created: skill",
+    "description": "User is familiar with Java, including Linear Search and Binary Search Tree (BST) Deletion implementa...",
+    "timestamp": "2026-07-14T21:43:29.833678",
+    "event_type": "memory",
+    "color": "#6c5ce7",
+    "related_document": null,
+    "related_memory": "8994b538-8c49-4fb7-847b-a7c35622b2a2",
+    "related_graph_node": null
+  },
+  {
+    "id": "d460ac41-2566-4ad4-ab19-ba36240c7e50",
+    "title": "Memory Created: skill",
+    "description": "User understands theoretical concepts like Binary Search and Graph Representation using adjacency ma...",
+    "timestamp": "2026-07-14T21:43:38.446852",
+    "event_type": "memory",
+    "color": "#6c5ce7",
+    "related_document": null,
+    "related_memory": "3575c128-fa25-4563-b761-12cd529bbc38",
+    "related_graph_node": null
+  },
+  {
+    "id": "bbc977c8-ad27-48b1-af84-242d7ca3bbfc",
+    "title": "Memory Created: preference",
+    "description": "User receives promotional emails from Dribbble and LinkedIn",
+    "timestamp": "2026-07-14T21:43:45.417175",
+    "event_type": "memory",
+    "color": "#6c5ce7",
+    "related_document": null,
+    "related_memory": "8753297d-24fd-43de-a2f2-e5b00ffd5614",
+    "related_graph_node": null
+  },
+  {
+    "id": "7227f85d-2b7c-4f8c-9c0a-1b215f91aadf",
+    "title": "Ask EVOLVE: summarize the key points",
+    "description": "AI answered your question in 8.63s.",
+    "timestamp": "2026-07-14T21:43:53.903621",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
   }
 ]

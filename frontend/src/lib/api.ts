@@ -26,6 +26,11 @@ export interface SourceReference {
   document_name: string;
 }
 
+export interface RelatedEntity {
+  name: string;
+  type: string;
+}
+
 export interface ChatResponse {
   chat_id: string;
   answer: string;
@@ -33,6 +38,12 @@ export interface ChatResponse {
   confidence: number;
   document_name: string;
   processing_time: number;
+  related_entities?: RelatedEntity[];
+  related_graph_nodes?: any[];
+  memory_ids?: string[];
+  related_documents?: any[];
+  related_emails?: any[];
+  related_calendar_events?: any[];
 }
 
 export interface UploadResponse {
