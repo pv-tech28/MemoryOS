@@ -2,6 +2,7 @@
 
 import AppLayout from "@/components/layout/AppLayout";
 import { motion } from "framer-motion";
+import { useState } from "react";
 import {
   User,
   Bell,
@@ -17,35 +18,70 @@ import {
   Trash2,
 } from "lucide-react";
 
-const settingsSections = [
+interface SettingsItem {
+  icon: any;
+  label: string;
+  desc: string;
+  color: string;
+  toggle?: boolean;
+  on?: boolean;
+  id: string;
+}
+
+interface SettingsSection {
+  title: string;
+  items: SettingsItem[];
+}
+
+const initialSettingsSections: SettingsSection[] = [
   {
     title: "Account",
     items: [
-      { icon: User, label: "Profile", desc: "Manage your name, avatar and preferences", color: "#4facfe" },
-      { icon: Mail, label: "Email", desc: "siddh.tyagi@gmail.com", color: "#ea4335" },
-      { icon: Key, label: "Password & Security", desc: "Update password and 2FA settings", color: "#f0a500" },
+      { icon: User, label: "Profile", desc: "Manage your name, avatar and preferences", color: "#4facfe", id: "profile" },
+      { icon: Mail, label: "Email", desc: "siddh.tyagi@gmail.com", color: "#ea4335", id: "email" },
+      { icon: Key, label: "Password & Security", desc: "Update password and 2FA settings", color: "#f0a500", id: "security" },
     ],
   },
   {
     title: "Preferences",
     items: [
-      { icon: Palette, label: "Appearance", desc: "Dark mode, colors and layout", color: "#6c5ce7", toggle: true, on: true },
-      { icon: Bell, label: "Notifications", desc: "Manage push and email notifications", color: "#00d68f", toggle: true, on: true },
-      { icon: Volume2, label: "Sound Effects", desc: "Toggle UI sound effects", color: "#e84393", toggle: true, on: false },
-      { icon: Globe, label: "Language", desc: "English (US)", color: "#4facfe" },
+      { icon: Palette, label: "Appearance", desc: "Dark mode, colors and layout", color: "#6c5ce7", toggle: true, on: true, id: "appearance" },
+      { icon: Bell, label: "Notifications", desc: "Manage push and email notifications", color: "#00d68f", toggle: true, on: true, id: "notifications" },
+      { icon: Volume2, label: "Sound Effects", desc: "Toggle UI sound effects", color: "#e84393", toggle: true, on: false, id: "sound" },
+      { icon: Globe, label: "Language", desc: "English (US)", color: "#4facfe", id: "language" },
     ],
   },
   {
     title: "Data & Privacy",
     items: [
-      { icon: Database, label: "Connected Sources", desc: "6 sources connected", color: "#00d68f" },
-      { icon: Shield, label: "Privacy", desc: "Data sharing and retention settings", color: "#f0a500" },
-      { icon: Trash2, label: "Delete Data", desc: "Remove all indexed memories", color: "#ff6b6b" },
+      { icon: Database, label: "Connected Sources", desc: "6 sources connected", color: "#00d68f", id: "sources" },
+      { icon: Shield, label: "Privacy", desc: "Data sharing and retention settings", color: "#f0a500", id: "privacy" },
+      { icon: Trash2, label: "Delete Data", desc: "Remove all indexed memories", color: "#ff6b6b", id: "delete-data" },
     ],
   },
 ];
 
 export default function SettingsPage() {
+  const [settingsSections, setSettingsSections] = useState<SettingsSection[]>(initialSettingsSections);
+
+  const handleToggle = (sectionTitle: string, itemId: string) => {
+    setSettingsSections((prev) =>
+      prev.map((section) => {
+        if (section.title === sectionTitle) {
+          return {
+            ...section,
+            items: section.items.map((item) =>
+              item.id === itemId && item.toggle !== undefined
+                ? { ...item, on: !item.on }
+                : item
+            ),
+          };
+        }
+        return section;
+      })
+    );
+  };
+
   return (
     <AppLayout>
       <div className="p-8 max-w-[800px] mx-auto">
@@ -117,7 +153,7 @@ export default function SettingsPage() {
                 const Icon = item.icon;
                 return (
                   <div
-                    key={i}
+                    key={item.id}
                     className="flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors hover:bg-[var(--bg-card)]"
                     style={{
                       borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none",
@@ -137,7 +173,11 @@ export default function SettingsPage() {
                     </div>
                     {"toggle" in item ? (
                       <div
-                        className="w-10 h-5.5 rounded-full relative cursor-pointer transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggle(section.title, item.id);
+                        }}
+                        className="w-10 h-6 rounded-full relative cursor-pointer transition-colors"
                         style={{
                           background: item.on ? "var(--accent)" : "var(--bg-elevated)",
                           border: `1px solid ${item.on ? "var(--accent)" : "var(--border)"}`,
