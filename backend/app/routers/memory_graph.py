@@ -2,6 +2,7 @@
 """
 Memory Graph Router
 Handles generation of memory graph data from documents, sources, and extracted entities.
+Reverted to show all nodes (as requested by user).
 """
 
 import os
