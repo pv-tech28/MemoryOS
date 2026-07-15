@@ -1,4 +1,5 @@
 "use client";
+// Fixed chat history and memory graph
 
 import AppLayout from "@/components/layout/AppLayout";
 import { motion, AnimatePresence } from "framer-motion";
