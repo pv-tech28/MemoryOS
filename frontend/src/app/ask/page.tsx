@@ -67,8 +67,38 @@ export default function AskPage() {
   const [searchChats, setSearchChats] = useState<string>("");
   const [backendOnline, setBackendOnline] = useState(false);
 
-  // Chat history (stored locally for now)
+  // Chat history (stored in localStorage)
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
+
+  // Load chat history from localStorage only on client
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("chatHistory");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setChatHistory(parsed.map((item: any) => ({
+              ...item,
+              date: new Date(item.date),
+            })));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse chat history, resetting:", e);
+        localStorage.removeItem("chatHistory");
+      }
+      setChatHistoryLoaded(true);
+    }
+  }, []);
+
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== "undefined" && chatHistoryLoaded) {
+      localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+    }
+  }, [chatHistory, chatHistoryLoaded]);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -160,9 +190,8 @@ export default function AskPage() {
 
     // Update current chat
     if (!currentChat) {
-      const newChatId = Date.now().toString();
       const newChat: ChatHistoryItem = {
-        id: newChatId,
+        id: "temp-id", // Temporary ID until backend responds
         title: question.slice(0, 50) + (question.length > 50 ? "..." : ""),
         date: new Date(),
         messages: [userMsg],
@@ -185,7 +214,7 @@ export default function AskPage() {
       // Call backend API
       const response: ChatResponse = await chatWithDocument(
         question,
-        currentChat?.id
+        currentChat?.id === "temp-id" ? undefined : currentChat?.id
       );
 
       // Create AI message
@@ -205,18 +234,18 @@ export default function AskPage() {
         follow_up_suggestions: generateFollowUps(),
       };
 
-      // Update current chat
+      // Update current chat with real chat_id from backend
       setCurrentChat((prev) =>
         prev
-          ? { ...prev, messages: [...prev.messages, aiMsg] }
+          ? { ...prev, id: response.chat_id, messages: [...prev.messages, aiMsg] }
           : prev
       );
 
       // Update chat history list
       setChatHistory((prev) =>
         prev.map((chat) =>
-          chat.id === (currentChat?.id || Date.now().toString())
-            ? { ...chat, messages: [...chat.messages, userMsg, aiMsg] }
+          chat.id === (currentChat?.id || "temp-id")
+            ? { ...chat, id: response.chat_id, messages: [...chat.messages, userMsg, aiMsg] }
             : chat
         )
       );
