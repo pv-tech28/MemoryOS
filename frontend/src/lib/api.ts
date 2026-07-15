@@ -166,9 +166,43 @@ export interface GraphEdge {
   label: string;
 }
 
-export interface MemoryGraphData {
+export interface GraphNode {
+  id: string;
+  name: string;
+  type: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  [key: string]: any;
+}
+
+export interface GraphEdge {
+  id: string;
+  source_node_id: string;
+  target_node_id: string;
+  type: string;
+  description: string | null;
+  created_at: string;
+  source_name?: string;
+  target_name?: string;
+  [key: string]: any;
+}
+
+export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface RelatedMemoriesResponse {
+  node: GraphNode | null;
+  edges: GraphEdge[];
+  related_nodes: GraphNode[];
+  memories: Memory[];
+}
+
+export interface MemoryGraphData {
+  nodes: any[];
+  edges: any[];
 }
 
 export async function getMemoryGraph(): Promise<MemoryGraphData> {
@@ -177,16 +211,9 @@ export async function getMemoryGraph(): Promise<MemoryGraphData> {
   return res.json();
 }
 
-export async function getRelatedMemories(
-  entity: string,
-  type?: string
-): Promise<MemoryGraphData> {
-  let url = `${API_BASE}/memory-graph/related?entity=${encodeURIComponent(entity)}`;
-  if (type) {
-    url += `&type=${encodeURIComponent(type)}`;
-  }
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch related memories");
+export async function getRelatedMemories(entityName: string): Promise<RelatedMemoriesResponse> {
+  const res = await fetch(`${API_BASE}/memories/related/${encodeURIComponent(entityName)}`);
+  if (!res.ok) throw new Error("Failed to get related memories");
   return res.json();
 }
 
@@ -267,47 +294,7 @@ export async function deleteMemory(memoryId: string): Promise<void> {
     if (!res.ok) throw new Error("Failed to delete memory");
 }
 
-export interface GraphNode {
-    id: string;
-    name: string;
-    type: string;
-    description: string | null;
-    created_at: string;
-    updated_at: string;
-}
 
-export interface GraphEdge {
-    id: string;
-    source_node_id: string;
-    target_node_id: string;
-    type: string;
-    description: string | null;
-    created_at: string;
-}
-
-export interface GraphData {
-    nodes: GraphNode[];
-    edges: GraphEdge[];
-}
-
-export interface RelatedMemoriesResponse {
-    node: GraphNode | null;
-    edges: any[];
-    related_nodes: GraphNode[];
-    memories: Memory[];
-}
-
-export async function getGraph(): Promise<GraphData> {
-    const res = await fetch(`${API_BASE}/memories/graph`);
-    if (!res.ok) throw new Error("Failed to get graph");
-    return res.json();
-}
-
-export async function getRelatedMemories(entityName: string): Promise<RelatedMemoriesResponse> {
-    const res = await fetch(`${API_BASE}/memories/related/${encodeURIComponent(entityName)}`);
-    if (!res.ok) throw new Error("Failed to get related memories");
-    return res.json();
-}
 
 export interface GraphStats {
     total_nodes: number;
@@ -357,6 +344,13 @@ export async function getTimeline(limit: number = 100): Promise<TimelineResponse
   const res = await fetch(`${API_BASE}/timeline?limit=${limit}`);
   if (!res.ok) throw new Error("Failed to fetch timeline");
   return res.json();
+}
+
+export async function deleteTimelineEvent(eventId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/timeline/${eventId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete timeline event");
 }
 
 /* ─── Dashboard ─── */
