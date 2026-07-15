@@ -1,4 +1,5 @@
 
+
 """
 Memory Extraction Engine
 Extracts, classifies and stores important memories from conversations
@@ -14,15 +15,8 @@ from .memory_store import (
     update_memory,
     increment_access
 )
-<<<<<<< HEAD
-from .memory_graph_builder import (
-    update_graph_from_memory
-)
-from .ai_provider import generate_response
-=======
-from .memory_graph_builder import process_memory
+from .memory_graph_builder import update_graph_from_memory
 from .llm import get_llm_provider
->>>>>>> 007607a (Describe your changes)
 
 EXTRACTION_PROMPT = """You are a memory extraction engine. Your task is to analyze conversations and extract only the IMPORTANT, MEMORABLE facts.
 
@@ -76,27 +70,17 @@ def extract_memories(
         role = "User" if msg["role"] == "user" else "Assistant"
         conv_text += f"{role}: {msg['content']}\n"
 
-<<<<<<< HEAD
-    # Use OpenRouter to extract memories
-    try:
-        text_response = generate_response(
-=======
     # Get LLM provider
     llm = get_llm_provider()
 
     try:
         llm_response = llm.generate(
->>>>>>> 007607a (Describe your changes)
             prompt=f"{EXTRACTION_PROMPT}\n{conv_text}",
             temperature=0.1,
             max_tokens=1024
         )
-<<<<<<< HEAD
-=======
-
         # Parse response
         text_response = llm_response["text"]
->>>>>>> 007607a (Describe your changes)
         # Clean up response to get valid JSON
         json_str = text_response.strip()
         if json_str.startswith("```json"):
@@ -121,8 +105,8 @@ def extract_memories(
                     memory_type=memory_obj["type"],
                     user_id=user_id
                 )
-<<<<<<< HEAD
 
+                memory_id = None
                 if existing:
                     # Update existing memory: keep text, boost importance
                     new_importance = min(1.0, existing["importance"] + 0.1)
@@ -132,7 +116,8 @@ def extract_memories(
                         importance=new_importance,
                         memory_type=memory_obj["type"]
                     )
-                    stored_ids.append(existing["id"])
+                    memory_id = existing["id"]
+                    stored_ids.append(memory_id)
                 else:
                     # Create new memory
                     memory_id = create_memory(
@@ -152,14 +137,6 @@ def extract_memories(
                     )
                 except Exception as e:
                     print(f"[MemoryExtractor] Error updating graph: {e}")
-=======
-                stored_ids.append(memory_id)
-                # Process memory to build graph (disabled temporarily to save quota)
-                # try:
-                #     process_memory(memory_id, memory_obj["memory"], memory_obj["type"])
-                # except Exception as e:
-                #     print(f"Error processing memory {memory_id} for graph: {e}")
->>>>>>> 007607a (Describe your changes)
 
         return stored_ids
 
@@ -167,3 +144,4 @@ def extract_memories(
         print(f"[MemoryExtractor] Error extracting memories: {e}")
         traceback.print_exc()
         return []
+
