@@ -2,28 +2,38 @@
 
 import AppLayout from "@/components/layout/AppLayout";
 import { motion } from "framer-motion";
-import { Clock, ArrowRight, Loader2 } from "lucide-react";
+import { Clock, ArrowRight, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getTimeline, TimelineResponse } from "@/lib/api";
+import { getTimeline, deleteTimelineEvent, TimelineResponse } from "@/lib/api";
 
 export default function TimelinePage() {
   const [timelineData, setTimelineData] = useState<TimelineResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await getTimeline();
-        setTimelineData(data);
-      } catch (e) {
-        console.error("Failed to fetch timeline", e);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const data = await getTimeline();
+      setTimelineData(data);
+    } catch (e) {
+      console.error("Failed to fetch timeline", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
+
+  const handleDelete = async (eventId: string) => {
+    try {
+      await deleteTimelineEvent(eventId);
+      await fetchData(); // Refresh the timeline
+    } catch (e) {
+      console.error("Failed to delete timeline event", e);
+    }
+  };
 
   // Flatten events with date
   const allEvents: Array<{ date: string; event: any }> = [];
@@ -87,12 +97,24 @@ export default function TimelinePage() {
                   />
 
                   {/* Card */}
-                  <div className="card p-5 flex-1 cursor-pointer">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock size={12} style={{ color: "var(--text-muted)" }} />
-                      <span className="text-[11px] font-medium" style={{ color: event.color }}>
-                        {date}
-                      </span>
+                  <div className="card p-5 flex-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock size={12} style={{ color: "var(--text-muted)" }} />
+                        <span className="text-[11px] font-medium" style={{ color: event.color }}>
+                          {date}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(event.id);
+                        }}
+                        className="p-1.5 rounded-lg transition-all hover:bg-red-500/10"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        <Trash2 size={14} className="hover:text-red-500" />
+                      </button>
                     </div>
                     <h3 className="text-sm font-semibold text-white">{event.title}</h3>
                     <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
