@@ -124,15 +124,17 @@ const NODE_ICONS: Record<string, any> = {
 function CustomNode({ data, selected, isHighlighted }: { data: any; selected: boolean; isHighlighted: boolean }) {
   const Icon = NODE_ICONS[data.type] || Sparkles;
   const color = NODE_COLORS[data.type] || "#6B7280";
+  const importance = data.importance || 0.5;
+  const scale = 0.8 + importance * 0.6; // Scale from 0.8 to 1.4 based on importance
 
   return (
     <div
       className={`px-4 py-3 rounded-xl border-2 shadow-2xl transition-all duration-300 ${
         selected
-          ? "scale-110 shadow-[0_0_30px_rgba(168,85,247,0.6)] ring-2 ring-offset-2 ring-offset-slate-950"
+          ? "shadow-[0_0_30px_rgba(168,85,247,0.6)] ring-2 ring-offset-2 ring-offset-slate-950"
           : isHighlighted
-          ? "scale-105 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
-          : "scale-100 hover:scale-105"
+          ? "shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+          : "hover:scale-105"
       }`}
       style={{
         backgroundColor: "rgba(15, 23, 42, 0.95)",
@@ -142,6 +144,7 @@ function CustomNode({ data, selected, isHighlighted }: { data: any; selected: bo
           : isHighlighted
           ? `0 0 20px ${color}40`
           : undefined,
+        transform: `scale(${selected ? scale * 1.1 : isHighlighted ? scale * 1.05 : scale})`,
       }}
     >
       <Handle
@@ -230,38 +233,42 @@ function MemoryGraphContent() {
       setGraphStats(statsData);
 
       const initialNodes: Node[] = graphData.nodes.map((node: any, idx: number) => ({
-        id: node.id,
-        type: "custom",
-        position: {
-          x: 200 + Math.random() * 400,
-          y: 200 + Math.random() * 400,
-        },
-        data: { 
-          label: node.label, 
-          type: node.type,
-          description: node.description,
-          date: node.date,
-        },
-      }));
+            id: node.id,
+            type: "custom",
+            position: {
+                x: 200 + Math.random() * 400,
+                y: 200 + Math.random() * 400,
+            },
+            data: { 
+                label: node.label, 
+                type: node.type,
+                description: node.description,
+                date: node.date,
+                importance: node.importance || 0.5,
+            },
+        }));
 
-      const initialEdges: Edge[] = graphData.edges.map((edge: any, idx: number) => ({
-        id: `edge-${idx}`,
-        source: edge.source,
-        target: edge.target,
-        type: "smoothstep",
-        animated: true,
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: "#A855F7",
-        },
-        label: edge.label,
-        labelStyle: {
-          fill: "#94a3b8",
-          fontSize: "10px",
-          fontWeight: 500,
-        },
-        style: { stroke: "#6C5CE7", strokeWidth: 2 },
-      }));
+        const initialEdges: Edge[] = graphData.edges.map((edge: any, idx: number) => ({
+            id: `edge-${idx}`,
+            source: edge.source,
+            target: edge.target,
+            type: "smoothstep",
+            animated: true,
+            markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: "#A855F7",
+            },
+            label: edge.label,
+            labelStyle: {
+                fill: "#94a3b8",
+                fontSize: "10px",
+                fontWeight: 500,
+            },
+            style: { 
+                stroke: "#6C5CE7", 
+                strokeWidth: (edge.strength || 1) * 3,
+            },
+        }));
 
       setNodes(initialNodes);
       setEdges(initialEdges);

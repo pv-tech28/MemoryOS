@@ -10,6 +10,9 @@ backend/**/__pycache__/
 backend/test*.py
 backend/debug*.py
 backend/test*.txt
+backend/faiss_store/
+backend/knowledge_graph.json
+backend/timeline_events.json
 
 test_document.pdf
 
