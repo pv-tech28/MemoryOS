@@ -65,6 +65,7 @@ export default function AskPage() {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [knowledgeSource, setKnowledgeSource] = useState<string>("all");
   const [searchChats, setSearchChats] = useState<string>("");
+  const [backendOnline, setBackendOnline] = useState(false);
 
   // Chat history (stored locally for now)
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
