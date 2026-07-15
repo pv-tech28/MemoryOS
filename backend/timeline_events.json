@@ -97,5 +97,27 @@
     "related_document": null,
     "related_memory": null,
     "related_graph_node": null
+  },
+  {
+    "id": "f482c4f9-0c53-4f48-bbfe-30602c5e6c40",
+    "title": "Ask EVOLVE: tell me about these files",
+    "description": "AI answered your question in 53.37s.",
+    "timestamp": "2026-07-15T12:14:36.622933",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
+  },
+  {
+    "id": "81995c49-1572-4687-b1fc-aa2ffa8fefe0",
+    "title": "Ask EVOLVE: tell me key points",
+    "description": "AI answered your question in 9.28s.",
+    "timestamp": "2026-07-15T17:08:09.372233",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
   }
 ]
