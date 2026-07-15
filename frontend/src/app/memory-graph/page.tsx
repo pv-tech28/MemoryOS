@@ -16,13 +16,11 @@ import {
   Edge,
   MarkerType,
   MiniMap,
-  useReactFlow,
   ReactFlowProvider,
-  Panel,
   NodeMouseHandler,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   User,
   FileText,
@@ -33,27 +31,6 @@ import {
   CalendarCheck,
   Sparkles,
   Trash2,
-<<<<<<< HEAD
-  Search,
-  X
-} from "lucide-react";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import ReactFlow, {
-  ReactFlowProvider,
-  addEdge,
-  useNodesState,
-  useEdgesState,
-  Controls,
-  Background,
-  MiniMap,
-  Handle,
-  Position,
-  MarkerType,
-  Node,
-  Edge,
-} from "reactflow";
-import "reactflow/dist/style.css";
-=======
   RefreshCw,
   Search,
   Filter,
@@ -69,67 +46,41 @@ import "reactflow/dist/style.css";
   Cpu,
   Globe,
 } from "lucide-react";
->>>>>>> 007607a (Describe your changes)
 import {
-  getGraph,
+  getMemoryGraph,
   getRelatedMemories,
   deleteMemory,
-<<<<<<< HEAD
-  type Memory,
-  getRelatedMemories
-=======
   getMemories,
   getGraphStats,
-  GraphNode as APIGraphNode,
-  GraphEdge as APIGraphEdge,
   Memory,
   GraphStats,
->>>>>>> 007607a (Describe your changes)
 } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
-<<<<<<< HEAD
-const categories = {
-  Person: "#4facfe",
-  Project: "#00d68f",
-  Skill: "#f0a500",
-  Company: "#4285f4",
-  Technology: "#ff6b6b",
-  Goal: "#9b59b6",
-  Preference: "#e84393",
-  Education: "#34a853",
-  Task: "#1abc9c",
-  Event: "#e67e22",
-  Document: "#e84393",
-  Custom: "#A142F4",
-  Email: "#ea4335",
-  Meeting: "#f0a500",
-  Code: "#f0f0f0",
-  Chat: "#25d366"
-=======
 // --- Configuration: Node Types & Colors ---
 
 const NODE_COLORS: Record<string, string> = {
-  Person: "#60a5fa", // Blue
-  Project: "#34d399", // Green
-  Company: "#f87171", // Red
-  Technology: "#a78bfa", // Purple
-  Skill: "#c4b5fd", // Light purple
-  Language: "#fb923c", // Orange
-  Framework: "#22d3ee", // Cyan
-  University: "#fbbf24", // Yellow
-  Organization: "#f97316", // Amber
-  Document: "#f472b6", // Pink
-  Email: "#ef4444", // Red
-  Task: "#facc15", // Yellow
-  Goal: "#fdba74", // Orange
-  Preference: "#4ade80", // Green
-  Location: "#14b8a6", // Teal
-  Date: "#94a3b8", // Slate
-  Event: "#22c55e", // Green
-  Meeting: "#06b6d4", // Cyan
-  Certificate: "#eab308", // Yellow
-  Custom: "#94a3b8", // Gray
+  Person: "#60a5fa",
+  Project: "#34d399",
+  Company: "#f87171",
+  Technology: "#a78bfa",
+  Skill: "#c4b5fd",
+  Language: "#fb923c",
+  Framework: "#22d3ee",
+  University: "#fbbf24",
+  Organization: "#f97316",
+  Document: "#f472b6",
+  Email: "#ef4444",
+  Task: "#facc15",
+  Goal: "#fdba74",
+  Preference: "#4ade80",
+  Location: "#14b8a6",
+  Date: "#94a3b8",
+  Event: "#22c55e",
+  Meeting: "#06b6d4",
+  Certificate: "#eab308",
+  Conversation: "#a855f7",
+  Custom: "#94a3b8",
 };
 
 const NODE_ICONS: Record<string, any> = {
@@ -152,6 +103,7 @@ const NODE_ICONS: Record<string, any> = {
   Event: CalendarCheck,
   Meeting: Calendar,
   Certificate: Award,
+  Conversation: Sparkles,
   Custom: Sparkles,
 };
 
@@ -169,7 +121,7 @@ function CustomNode({ data, selected }: { data: any; selected: boolean }) {
           : "scale-100 hover:scale-105"
       }`}
       style={{
-        backgroundColor: "#0f172a", // Darker background
+        backgroundColor: "#0f172a",
         borderColor: selected ? color : "#334155",
         boxShadow: selected ? `0 0 20px ${color}40` : undefined,
       }}
@@ -199,274 +151,31 @@ function CustomNode({ data, selected }: { data: any; selected: boolean }) {
 
 const nodeTypes = {
   custom: CustomNode,
->>>>>>> 007607a (Describe your changes)
 };
 
 // --- Main Component ---
 
-<<<<<<< HEAD
-// Custom Node Component
-const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
-  return (
-    <div
-      className={`px-4 py-2 rounded-xl shadow-lg transition-all duration-200 border-2 ${
-        selected ? "scale-110 z-50" : "hover:scale-105"
-      }`}
-      style={{
-        backgroundColor: data.color,
-        borderColor: selected ? "white" : "transparent",
-        color: "white",
-        minWidth: "120px",
-        textAlign: "center",
-      }}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-white" />
-      <div className="font-semibold text-sm">{data.label}</div>
-      <div className="text-[10px] opacity-80">{data.type}</div>
-      <Handle type="source" position={Position.Bottom} className="!bg-white" />
-    </div>
-  );
-};
-
-const nodeTypes = {
-  custom: CustomNode,
-};
-
-const MemoryGraphPageContent = () => {
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [memoriesLoading, setMemoriesLoading] = useState(true);
-  const [memories, setMemories] = useState<Memory[]>([]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-
-  // Function to convert API data to ReactFlow nodes and edges
-  const convertToReactFlow = (
-    apiNodes: APIGraphNode[],
-    apiEdges: APIGraphEdge[]
-  ): { nodes: Node[]; edges: Edge[] } => {
-    const rfNodes: Node[] = apiNodes.map((node, index) => ({
-      id: node.id,
-      type: "custom",
-      position: {
-        x: 100 + index * 150 + Math.random() * 50,
-        y: 100 + Math.random() * 200,
-      },
-      data: {
-        ...node,
-      },
-    }));
-
-    const rfEdges: Edge[] = apiEdges.map((edge, index) => ({
-      id: `edge-${index}`,
-      source: edge.source,
-      target: edge.target,
-      label: edge.label,
-      animated: true,
-      markerEnd: { type: MarkerType.ArrowClosed, color: "#8b5cf6" },
-      style: { stroke: "#8b5cf6", strokeWidth: 2 },
-    }));
-
-    return { nodes: rfNodes, edges: rfEdges };
-  };
-
-  // Fetch graph data
-  const loadFullGraph = useCallback(async () => {
-    try {
-      const data = await getMemoryGraph();
-      const { nodes: rfNodes, edges: rfEdges } = convertToReactFlow(
-        data.nodes,
-        data.edges
-      );
-      setNodes(rfNodes);
-      setEdges(rfEdges);
-      if (rfNodes.length > 0) {
-        setSelectedNodeId(rfNodes[0].id);
-      }
-    } catch (err) {
-      console.error("Failed to fetch memory graph:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [setNodes, setEdges]);
-
-  // Search for related memories
-  const handleSearch = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) {
-      loadFullGraph();
-      return;
-    }
-    try {
-      const data = await getRelatedMemories(searchQuery);
-      const { nodes: rfNodes, edges: rfEdges } = convertToReactFlow(
-        data.nodes,
-        data.edges
-      );
-      setNodes(rfNodes);
-      setEdges(rfEdges);
-      if (rfNodes.length > 0) {
-        setSelectedNodeId(rfNodes[0].id);
-      }
-    } catch (err) {
-      console.error("Failed to search memories:", err);
-    }
-  }, [searchQuery, loadFullGraph, setNodes, setEdges]);
-
-  // Initialize size and fetch graph
-  useEffect(() => {
-    loadFullGraph();
-  }, [loadFullGraph]);
-
-  // Fetch memories
-  useEffect(() => {
-    const fetchMemories = async () => {
-      try {
-        const data = await getMemories();
-        setMemories(data.memories);
-      } catch (err) {
-        console.error("Failed to fetch memories:", err);
-      } finally {
-        setMemoriesLoading(false);
-      }
-    };
-    fetchMemories();
-  }, []);
-
-  // Delete memory handler
-  const handleDeleteMemory = async (memoryId: string) => {
-    try {
-      await deleteMemory(memoryId);
-      setMemories((prev) => prev.filter((m) => m.id !== memoryId));
-    } catch (err) {
-      console.error("Failed to delete memory:", err);
-    }
-  };
-
-  // Find selected node details
-  const selectedNode = useMemo(() => {
-    return nodes.find((n) => n.id === selectedNodeId)?.data as any;
-  }, [nodes, selectedNodeId]);
-
-  // Node click handler
-  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    setSelectedNodeId(node.id);
-  }, []);
-=======
 function MemoryGraphContent() {
   // --- State ---
-  const [apiNodes, setApiNodes] = useState<APIGraphNode[]>([]);
-  const [apiEdges, setApiEdges] = useState<APIGraphEdge[]>([]);
+  const [apiNodes, setApiNodes] = useState<any[]>([]);
+  const [apiEdges, setApiEdges] = useState<any[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [graphStats, setGraphStats] = useState<GraphStats | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selectedNode, setSelectedNode] = useState<APIGraphNode | null>(null);
+  const [selectedNode, setSelectedNode] = useState<any | null>(null);
   const [selectedRelatedMemories, setSelectedRelatedMemories] =
     useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
-  const { fitView, getNodes, getEdges } = useReactFlow();
-  const animationFrameRef = useRef<number>();
-
-  // --- Force-Directed Layout ---
-  const runForceLayout = useCallback(() => {
-    if (nodes.length === 0) return;
-
-    const width = 1200;
-    const height = 800;
-    const center = { x: width / 2, y: height / 2 };
-
-    // Create a copy to work with
-    const layoutNodes = nodes.map((n) => ({
-      ...n,
-      x: n.x || center.x + (Math.random() - 0.5) * 400,
-      y: n.y || center.y + (Math.random() - 0.5) * 400,
-      fx: null,
-      fy: null,
-      vx: 0,
-      vy: 0,
-    }));
-
-    const layoutEdges = edges.map((e) => ({
-      source: e.source,
-      target: e.target,
-    }));
-
-    // Simple force simulation steps (lightweight)
-    const alphaDecay = 0.01;
-    let alpha = 1;
-
-    const tick = () => {
-      // 1. Apply repulsion between all pairs
-      for (let i = 0; i < layoutNodes.length; i++) {
-        for (let j = i + 1; j < layoutNodes.length; j++) {
-          const dx = layoutNodes[i].x! - layoutNodes[j].x!;
-          const dy = layoutNodes[i].y! - layoutNodes[j].y!;
-          const distSq = dx * dx + dy * dy;
-          const force = 20000 / distSq;
-          const dist = Math.sqrt(distSq);
-          layoutNodes[i].vx! += (dx / dist) * force;
-          layoutNodes[i].vy! += (dy / dist) * force;
-          layoutNodes[j].vx! -= (dx / dist) * force;
-          layoutNodes[j].vy! -= (dy / dist) * force;
-        }
-      }
-
-      // 2. Apply attraction for connected nodes
-      for (const edge of layoutEdges) {
-        const source = layoutNodes.find((n) => n.id === edge.source);
-        const target = layoutNodes.find((n) => n.id === edge.target);
-        if (!source || !target) continue;
-        const dx = source.x! - target.x!;
-        const dy = source.y! - target.y!;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const force = (dist - 150) * 0.01;
-        source.vx! -= (dx / dist) * force;
-        source.vy! -= (dy / dist) * force;
-        target.vx! += (dx / dist) * force;
-        target.vy! += (dy / dist) * force;
-      }
-
-      // 3. Apply centering force
-      for (const node of layoutNodes) {
-        node.vx! += (center.x - node.x!) * 0.005;
-        node.vy! += (center.y - node.y!) * 0.005;
-      }
-
-      // 4. Update positions
-      for (const node of layoutNodes) {
-        node.vx! *= 0.9; // Damping
-        node.vy! *= 0.9;
-        node.x! += node.vx!;
-        node.y! += node.vy!;
-      }
-
-      // Update alpha
-      alpha *= 1 - alphaDecay;
-
-      // 5. Update ReactFlow nodes
-      setNodes(layoutNodes);
-
-      // 6. Continue animating if alpha is still high enough
-      if (alpha > 0.01) {
-        animationFrameRef.current = requestAnimationFrame(tick);
-      }
-    };
-
-    tick();
-  }, [nodes, edges, setNodes]);
 
   // --- Fetch Data ---
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [graphData, memoriesData, statsData] = await Promise.all([
-        getGraph(),
+        getMemoryGraph(),
         getMemories(),
         getGraphStats(),
       ]);
@@ -475,28 +184,27 @@ function MemoryGraphContent() {
       setMemories(memoriesData.memories);
       setGraphStats(statsData);
 
-      // Convert to ReactFlow nodes, apply initial positions
-      const initialNodes: Node[] = graphData.nodes.map((node, idx) => ({
+      const initialNodes: Node[] = graphData.nodes.map((node: any, idx: number) => ({
         id: node.id,
         type: "custom",
         position: {
           x: 300 + (idx % 8) * 120,
           y: 200 + Math.floor(idx / 8) * 120,
         },
-        data: { label: node.name, type: node.type },
+        data: { label: node.label, type: node.type },
       }));
 
-      const initialEdges: Edge[] = graphData.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source_node_id,
-        target: edge.target_node_id,
+      const initialEdges: Edge[] = graphData.edges.map((edge: any, idx: number) => ({
+        id: `edge-${idx}`,
+        source: edge.source,
+        target: edge.target,
         type: "smoothstep",
         animated: true,
         markerEnd: {
           type: MarkerType.ArrowClosed,
           color: "#a78bfa",
         },
-        label: edge.type,
+        label: edge.label,
         labelStyle: {
           fill: "#94a3b8",
           fontSize: "10px",
@@ -517,24 +225,6 @@ function MemoryGraphContent() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  useEffect(() => {
-    if (nodes.length > 0) {
-      setTimeout(() => {
-        fitView({ padding: 0.3 });
-        runForceLayout();
-      }, 300);
-    }
-  }, [nodes.length, fitView, runForceLayout]);
-
-  // Cleanup animation frame on unmount
-  useEffect(() => {
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, []);
 
   // --- Handlers ---
   const onConnect = useCallback(
@@ -557,7 +247,7 @@ function MemoryGraphContent() {
       const apiNode = apiNodes.find((n) => n.id === node.id);
       if (apiNode) {
         setSelectedNode(apiNode);
-        const related = await getRelatedMemories(apiNode.name);
+        const related = await getRelatedMemories(apiNode.label);
         setSelectedRelatedMemories(related);
       }
     },
@@ -569,7 +259,7 @@ function MemoryGraphContent() {
       await deleteMemory(memoryId);
       await fetchData();
       if (selectedNode) {
-        const related = await getRelatedMemories(selectedNode.name);
+        const related = await getRelatedMemories(selectedNode.label);
         setSelectedRelatedMemories(related);
       }
     } catch (e) {
@@ -577,168 +267,75 @@ function MemoryGraphContent() {
     }
   };
 
-  // --- Derived State (Filters & Search) ---
-  const { filteredNodes, filteredEdges, highlightedNodeIds } = useMemo(() => {
-    let filteredNodes = [...apiNodes];
-    let highlightedNodeIds = new Set<string>();
-
-    // 1. Apply Search
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filteredNodes = filteredNodes.filter((node) =>
-        node.name.toLowerCase().includes(q)
-      );
-      highlightedNodeIds = new Set(filteredNodes.map((n) => n.id));
+  // --- Derived State ---
+  const { filteredNodes, filteredEdges } = useMemo(() => {
+    // If no filters, return all
+    if (!searchQuery && activeFilters.length === 0 && !selectedNode) {
+      return { filteredNodes: nodes, filteredEdges: edges };
     }
 
-    // 2. Apply Filters
-    if (activeFilters.length > 0) {
-      filteredNodes = filteredNodes.filter((node) =>
-        activeFilters.includes(node.type)
-      );
-      highlightedNodeIds = new Set(filteredNodes.map((n) => n.id));
+    // First find which nodes to keep
+    const keptNodeIds = new Set<string>();
+    const filteredApiNodes = apiNodes.filter((node) => {
+      let matches = true;
+      if (searchQuery) {
+        matches = node.label.toLowerCase().includes(searchQuery.toLowerCase());
+      }
+      if (matches && activeFilters.length > 0) {
+        matches = activeFilters.includes(node.type);
+      }
+      return matches;
+    });
+    filteredApiNodes.forEach((n) => keptNodeIds.add(n.id));
+
+    // Add selected node and neighbors
+    if (selectedNode) {
+      keptNodeIds.add(selectedNode.id);
+      apiEdges.forEach((e) => {
+        if (e.source === selectedNode.id) {
+          keptNodeIds.add(e.target);
+        }
+        if (e.target === selectedNode.id) {
+          keptNodeIds.add(e.source);
+        }
+      });
     }
 
-    // 3. Filter edges to only those between filtered nodes (if any filters active)
-    const nodeSet = new Set(filteredNodes.map((n) => n.id));
-    const filteredEdges = apiEdges.filter(
-      (e) => nodeSet.has(e.source_node_id) && nodeSet.has(e.target_node_id)
-    );
+    // Now filter nodes and edges
+    const filteredNodes = nodes.map((node) => ({
+      ...node,
+      data: { ...node.data },
+      style: {
+        ...node.style,
+        opacity: keptNodeIds.has(node.id) ? 1 : 0.1,
+      },
+    }));
 
-    return { filteredNodes, filteredEdges, highlightedNodeIds };
-  }, [apiNodes, apiEdges, searchQuery, activeFilters]);
+    const filteredEdges = edges.map((edge) => ({
+      ...edge,
+      style: {
+        ...edge.style,
+        opacity:
+          keptNodeIds.has(edge.source) && keptNodeIds.has(edge.target)
+            ? 1
+            : 0.1,
+      },
+    }));
 
-  // Update ReactFlow nodes to show/hide (by adjusting opacity or just re-setting)
-  // Wait, let's instead modify the existing nodes' data or style!
-  useEffect(() => {
-    setNodes((prevNodes) =>
-      prevNodes.map((node) => {
-        let opacity = 1;
-        if (
-          (searchQuery || activeFilters.length > 0) &&
-          !highlightedNodeIds.has(node.id)
-        ) {
-          opacity = 0.1;
-        }
-        // Also highlight selected node's neighbors if a node is selected!
-        if (selectedNode && selectedNode.id !== node.id) {
-          const isNeighbor = edges.some(
-            (e) =>
-              (e.source === selectedNode.id && e.target === node.id) ||
-              (e.target === selectedNode.id && e.source === node.id)
-          );
-          if (!isNeighbor) {
-            opacity = 0.1;
-          }
-        }
-        return {
-          ...node,
-          style: { ...node.style, opacity },
-        };
-      })
-    );
-    setEdges((prevEdges) =>
-      prevEdges.map((edge) => {
-        let opacity = 1;
-        if (
-          (searchQuery || activeFilters.length > 0) &&
-          (!highlightedNodeIds.has(edge.source) ||
-            !highlightedNodeIds.has(edge.target))
-        ) {
-          opacity = 0.1;
-        }
-        // Highlight edges connected to selected node!
-        if (
-          selectedNode &&
-          !(
-            edge.source === selectedNode.id || edge.target === selectedNode.id
-          )
-        ) {
-          opacity = 0.1;
-        }
-        return {
-          ...edge,
-          style: { ...edge.style, opacity },
-        };
-      })
-    );
-  }, [
-    highlightedNodeIds,
-    searchQuery,
-    activeFilters,
-    selectedNode,
-    edges,
-    setNodes,
-    setEdges,
-  ]);
+    return { filteredNodes, filteredEdges };
+  }, [nodes, edges, apiNodes, apiEdges, searchQuery, activeFilters, selectedNode]);
 
   const toggleFilter = (type: string) => {
-    if (activeFilters.includes(type)) {
-      setActiveFilters(activeFilters.filter((t) => t !== type));
-    } else {
-      setActiveFilters([...activeFilters, type]);
-    }
+    setActiveFilters((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
   };
->>>>>>> 007607a (Describe your changes)
 
   return (
     <AppLayout>
       <div className="flex h-screen bg-[#020617]">
         {/* --- Main Graph Area --- */}
         <div className="flex-1 flex flex-col">
-<<<<<<< HEAD
-          {/* Header */}
-          <div
-            className="flex items-center justify-between px-8 py-5 gap-4"
-            style={{ borderBottom: "1px solid var(--border)" }}
-          >
-            <div>
-              <h1 className="text-xl font-bold text-white">Memory Graph</h1>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                Intelligent knowledge graph of your memories and documents
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Search */}
-              <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-muted)" }} />
-                <input
-                  type="text"
-                  placeholder="Search entities..."
-                  className="w-full pl-10 pr-10 py-2 rounded-xl text-sm"
-                  style={{
-                    backgroundColor: "var(--bg-card)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                  }}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery("");
-                      loadFullGraph();
-                    }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-white/10 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
-                  </button>
-                )}
-              </form>
-              <button
-                onClick={loadFullGraph}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all hover:scale-[1.03]"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-secondary)",
-                }}
-              >
-                <Maximize2 size={14} />
-                Reset View
-=======
           {/* Top Header Panel */}
           <div className="flex items-center justify-between px-8 py-5 border-b border-slate-800 bg-[#020617]/80 backdrop-blur-sm z-10">
             <div>
@@ -778,44 +375,15 @@ function MemoryGraphContent() {
                   <RefreshCw size={14} />
                 )}
                 Refresh
->>>>>>> 007607a (Describe your changes)
               </button>
             </div>
           </div>
 
           {/* React Flow Canvas */}
-<<<<<<< HEAD
-          <div ref={reactFlowWrapper} className="flex-1 relative overflow-hidden">
-            {loading ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 size={48} className="animate-spin" style={{ color: "var(--accent)" }} />
-              </div>
-            ) : (
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onInit={setReactFlowInstance}
-                onNodeClick={onNodeClick}
-                nodeTypes={nodeTypes}
-                fitView
-                className="bg-[#0a0a1a]"
-              >
-                <Background color="#4c1d95" gap={20} />
-                <Controls style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text-primary)" }} />
-                <MiniMap
-                  nodeStrokeColor={(n) => (n.data as any).color || "#888"}
-                  nodeColor={(n) => (n.data as any).color || "#888"}
-                  style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
-                />
-              </ReactFlow>
-            )}
-=======
           <div className="flex-1">
             <ReactFlow
-              nodes={nodes}
-              edges={edges}
+              nodes={filteredNodes}
+              edges={filteredEdges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
@@ -825,7 +393,6 @@ function MemoryGraphContent() {
               className="bg-[#020617]"
               minZoom={0.2}
               maxZoom={4}
-              colorMode="dark"
             >
               <Background
                 color="#334155"
@@ -840,7 +407,6 @@ function MemoryGraphContent() {
                 className="bg-slate-900/90 backdrop-blur-sm border border-slate-700 rounded-xl shadow-xl"
               />
             </ReactFlow>
->>>>>>> 007607a (Describe your changes)
           </div>
         </div>
 
@@ -855,93 +421,6 @@ function MemoryGraphContent() {
                   <h3 className="text-sm font-semibold text-white">Graph Stats</h3>
                 </div>
 
-<<<<<<< HEAD
-            {selectedNode ? (
-              <div>
-                {/* Node Identity */}
-                <div
-                  className="flex items-center gap-3 p-4 rounded-xl mb-5"
-                  style={{
-                    backgroundColor: selectedNode.color + "22",
-                    border: `1px solid ${selectedNode.color}`,
-                  }}
-                >
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center"
-                    style={{ backgroundColor: selectedNode.color }}
-                  >
-                    <User size={20} color="white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-white">{selectedNode.label.replace("\n", " ")}</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                      Type: {selectedNode.type || selectedNode.category}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Description */}
-                {selectedNode.description && (
-                  <div className="mb-5">
-                    <p
-                      className="text-[10px] font-semibold uppercase tracking-wider mb-2"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Description
-                    </p>
-                    <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                      {selectedNode.description}
-                    </p>
-                  </div>
-                )}
-
-                {selectedNode.date && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock size={12} style={{ color: "var(--text-muted)" }} />
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      Created: {selectedNode.date}
-                    </p>
-                  </div>
-                )}
-
-                {selectedNode.owner && (
-                  <div className="flex items-center gap-2 mb-5">
-                    <User size={12} style={{ color: "var(--text-muted)" }} />
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      Owner: {selectedNode.owner}
-                    </p>
-                  </div>
-                )}
-
-                {/* Connected To */}
-                {selectedNode.connections && selectedNode.connections.length > 0 && (
-                  <div>
-                    <p
-                      className="text-[10px] font-semibold uppercase tracking-wider mb-3"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Connected To ({selectedNode.connections.length})
-                    </p>
-                    <div className="space-y-2">
-                      {selectedNode.connections.slice(0, 10).map((conn: string, i: number) => (
-                        <div
-                          key={i}
-                          className="card px-3 py-2.5 flex items-center gap-2.5 cursor-pointer"
-                        >
-                          <div
-                            className="w-2 h-2 rounded-full"
-                            style={{
-                              backgroundColor:
-                                Object.values(categories)[i % Object.values(categories).length],
-                            }}
-                          />
-                          <p className="text-xs text-white">{conn}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-=======
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 bg-slate-800 rounded-lg border border-slate-700">
                     <p className="text-slate-400">Total Nodes</p>
@@ -964,8 +443,7 @@ function MemoryGraphContent() {
                         {graphStats.most_connected.name}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {graphStats.most_connected.connection_count}{" "}
-                        connections
+                        {graphStats.most_connected.connection_count} connections
                       </p>
                     </div>
                   )}
@@ -977,7 +455,6 @@ function MemoryGraphContent() {
                     </p>
                   </div>
                 </div>
->>>>>>> 007607a (Describe your changes)
               </div>
             )}
 
@@ -987,46 +464,6 @@ function MemoryGraphContent() {
                 <Filter size={16} className="text-violet-400" />
                 <h3 className="text-sm font-semibold text-white">Filters</h3>
               </div>
-<<<<<<< HEAD
-            ) : memories.length === 0 ? (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                No memories extracted yet. Chat to create some!
-              </p>
-            ) : (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                {memories.map((memory) => (
-                  <div
-                    key={memory.id}
-                    className="card p-3 flex flex-col gap-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: memoryTypeColors[memory.type] || "#A142F4" }}
-                        />
-                        <span className="text-[10px] font-semibold uppercase" style={{ color: "var(--text-muted)" }}>
-                          {memory.type}
-                        </span>
-                        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                          • Importance: {memory.importance.toFixed(1)}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteMemory(memory.id)}
-                        className="p-1 rounded hover:bg-red-500/20 transition-colors"
-                      >
-                        <Trash2 size={10} style={{ color: "var(--text-muted)" }} />
-                      </button>
-                    </div>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      {memory.memory}
-                    </p>
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                      {new Date(memory.created_at).toLocaleString()}
-                    </p>
-                  </div>
-=======
 
               <div className="flex flex-wrap gap-2">
                 {Object.keys(NODE_COLORS).map((type) => (
@@ -1041,7 +478,6 @@ function MemoryGraphContent() {
                   >
                     {type}
                   </button>
->>>>>>> 007607a (Describe your changes)
                 ))}
               </div>
               {activeFilters.length > 0 && (
@@ -1090,7 +526,7 @@ function MemoryGraphContent() {
                     })()}
                     <div>
                       <p className="text-sm font-bold text-white">
-                        {selectedNode.name}
+                        {selectedNode.label}
                       </p>
                       <p className="text-xs text-slate-400">
                         {selectedNode.type}
@@ -1156,8 +592,7 @@ function MemoryGraphContent() {
                                       {mem.type}
                                     </span>
                                     <span className="text-[10px] text-slate-500">
-                                      Importance:{" "}
-                                      {mem.importance.toFixed(1)}
+                                      Importance: {mem.importance.toFixed(1)}
                                     </span>
                                   </div>
                                   <p className="text-xs text-slate-300">
@@ -1252,19 +687,6 @@ function MemoryGraphContent() {
       </div>
     </AppLayout>
   );
-<<<<<<< HEAD
-};
-
-const MemoryGraphPage = () => {
-  return (
-    <ReactFlowProvider>
-      <MemoryGraphPageContent />
-    </ReactFlowProvider>
-  );
-};
-
-export default MemoryGraphPage;
-=======
 }
 
 export default function MemoryGraphPage() {
@@ -1274,4 +696,3 @@ export default function MemoryGraphPage() {
     </ReactFlowProvider>
   );
 }
->>>>>>> 007607a (Describe your changes)
