@@ -1,5 +1,6 @@
 
 "use client";
+// Enhanced memory graph with force-directed layout and drag support
 
 import AppLayout from "@/components/layout/AppLayout";
 import {
