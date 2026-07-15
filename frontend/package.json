@@ -16,13 +16,9 @@
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-<<<<<<< HEAD
     "react-markdown": "^10.1.0",
     "reactflow": "^11.11.4",
     "remark-gfm": "^4.0.1"
-=======
-    "reactflow": "^11.11.4"
->>>>>>> 007607a (Describe your changes)
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
