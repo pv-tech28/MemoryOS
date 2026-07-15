@@ -129,3 +129,22 @@ def get_timeline_events(limit: int = 100) -> Dict[str, List[TimelineEvent]]:
     
     return grouped
 
+
+def delete_timeline_event(event_id: str) -> bool:
+    """
+    Delete a timeline event by ID.
+    
+    Args:
+        event_id: ID of event to delete
+    
+    Returns:
+        True if deleted, False if not found
+    """
+    events = _load_events()
+    initial_length = len(events)
+    events = [event for event in events if event.get("id") != event_id]
+    if len(events) != initial_length:
+        _save_events(events)
+        return True
+    return False
+

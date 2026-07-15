@@ -624,12 +624,19 @@ def get_related_memories(entity_name: str):
     if not node:
         return {"node": None, "edges": [], "related_nodes": [], "memories": []}
     
+    # Create a map from node id to node name
+    node_id_to_name = {n.id: n.name for n in service.get_all_nodes()}
+    
     # Get edges connected to this node
     edges = []
     related_node_ids = set()
     for e in service.get_all_edges():
         if e.source_id == node.id or e.target_id == node.id:
-            edges.append(e.model_dump())
+            edge_dict = e.model_dump()
+            # Add source_name and target_name
+            edge_dict["source_name"] = node_id_to_name.get(e.source_id, "Unknown")
+            edge_dict["target_name"] = node_id_to_name.get(e.target_id, "Unknown")
+            edges.append(edge_dict)
             if e.source_id != node.id:
                 related_node_ids.add(e.source_id)
             if e.target_id != node.id:
