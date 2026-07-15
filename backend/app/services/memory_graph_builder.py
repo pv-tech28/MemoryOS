@@ -591,3 +591,68 @@ def update_graph_from_memory(memory_text: str, memory_type: str) -> None:
     except Exception as e:
         print(f"[update_graph_from_memory] Error: {e}")
 
+
+def get_all_graph_nodes():
+    """Wrapper to get all nodes from graph service"""
+    service = get_graph_service()
+    nodes = service.get_all_nodes()
+    return [node.model_dump() for node in nodes]
+
+
+def get_all_graph_edges():
+    """Wrapper to get all edges from graph service"""
+    service = get_graph_service()
+    edges = service.get_all_edges()
+    return [edge.model_dump() for edge in edges]
+
+
+def get_graph_stats():
+    """Wrapper to get stats from graph service"""
+    service = get_graph_service()
+    return service.get_stats()
+
+
+def get_related_memories(entity_name: str):
+    """Get related memories for an entity"""
+    service = get_graph_service()
+    # Find node by name
+    node = None
+    for n in service.get_all_nodes():
+        if n.name.lower() == entity_name.lower():
+            node = n
+            break
+    if not node:
+        return {"node": None, "edges": [], "related_nodes": [], "memories": []}
+    
+    # Get edges connected to this node
+    edges = []
+    related_node_ids = set()
+    for e in service.get_all_edges():
+        if e.source_id == node.id or e.target_id == node.id:
+            edges.append(e.model_dump())
+            if e.source_id != node.id:
+                related_node_ids.add(e.source_id)
+            if e.target_id != node.id:
+                related_node_ids.add(e.target_id)
+    
+    # Get related nodes
+    related_nodes = []
+    for n in service.get_all_nodes():
+        if n.id in related_node_ids:
+            related_nodes.append(n.model_dump())
+    
+    # Get all memories (for now)
+    memories = []
+    try:
+        from .memory_store import get_relevant_memories
+        memories = [m for m in get_relevant_memories("", limit=100, min_importance=0.0)]
+    except Exception as e:
+        print(f"Error getting memories: {e}")
+    
+    return {
+        "node": node.model_dump(),
+        "edges": edges,
+        "related_nodes": related_nodes,
+        "memories": memories
+    }
+
