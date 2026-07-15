@@ -20,7 +20,7 @@ import {
   NodeMouseHandler,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   User,
   FileText,
@@ -45,6 +45,11 @@ import {
   Heart,
   Cpu,
   Globe,
+  ExternalLink,
+  MessageSquare,
+  Brain,
+  ZoomIn,
+  Layers,
 } from "lucide-react";
 import {
   getMemoryGraph,
@@ -54,33 +59,36 @@ import {
   getGraphStats,
   Memory,
   GraphStats,
+  chatWithDocument,
 } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  forceSimulation,
+  forceLink,
+  forceManyBody,
+  forceCenter,
+  forceCollide,
+} from "d3-force";
 
 // --- Configuration: Node Types & Colors ---
-
+// Updated to match user's requirements
 const NODE_COLORS: Record<string, string> = {
-  Person: "#60a5fa",
-  Project: "#34d399",
-  Company: "#f87171",
-  Technology: "#a78bfa",
-  Skill: "#c4b5fd",
-  Language: "#fb923c",
-  Framework: "#22d3ee",
-  University: "#fbbf24",
-  Organization: "#f97316",
-  Document: "#f472b6",
-  Email: "#ef4444",
-  Task: "#facc15",
-  Goal: "#fdba74",
-  Preference: "#4ade80",
-  Location: "#14b8a6",
-  Date: "#94a3b8",
-  Event: "#22c55e",
-  Meeting: "#06b6d4",
-  Certificate: "#eab308",
-  Conversation: "#a855f7",
-  Custom: "#94a3b8",
+  Person: "#3B82F6",       // Blue (User)
+  Document: "#A855F7",     // Purple
+  Email: "#EF4444",        // Red
+  Technology: "#22C55E",   // Green
+  Company: "#F97316",      // Orange
+  Event: "#FBBF24",        // Yellow
+  Project: "#EC4899",      // Pink
+  University: "#06B6D4",   // Cyan
+  Skill: "#84CC16",        // Lime
+  Custom: "#6B7280",       // Grey (Memory)
+  Memory: "#6B7280",       // Grey
+  Organization: "#F97316",
+  Task: "#FBBF24",
+  Meeting: "#06B6D4",
+  Certificate: "#84CC16",
+  Conversation: "#A855F7",
 };
 
 const NODE_ICONS: Record<string, any> = {
@@ -104,46 +112,54 @@ const NODE_ICONS: Record<string, any> = {
   Meeting: Calendar,
   Certificate: Award,
   Conversation: Sparkles,
-  Custom: Sparkles,
+  Custom: Brain,
+  Memory: Brain,
 };
 
 // --- Custom Node Component ---
-
-function CustomNode({ data, selected }: { data: any; selected: boolean }) {
+function CustomNode({ data, selected, isHighlighted }: { data: any; selected: boolean; isHighlighted: boolean }) {
   const Icon = NODE_ICONS[data.type] || Sparkles;
-  const color = NODE_COLORS[data.type] || "#94a3b8";
+  const color = NODE_COLORS[data.type] || "#6B7280";
 
   return (
     <div
-      className={`px-4 py-3 rounded-xl border-2 shadow-lg transition-all duration-300 ${
+      className={`px-4 py-3 rounded-xl border-2 shadow-2xl transition-all duration-300 ${
         selected
-          ? "scale-110 shadow-2xl ring-2 ring-offset-2"
+          ? "scale-110 shadow-[0_0_30px_rgba(168,85,247,0.6)] ring-2 ring-offset-2 ring-offset-slate-950"
+          : isHighlighted
+          ? "scale-105 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
           : "scale-100 hover:scale-105"
       }`}
       style={{
-        backgroundColor: "#0f172a",
-        borderColor: selected ? color : "#334155",
-        boxShadow: selected ? `0 0 20px ${color}40` : undefined,
+        backgroundColor: "rgba(15, 23, 42, 0.95)",
+        borderColor: selected ? color : isHighlighted ? `${color}80` : "#334155",
+        boxShadow: selected
+          ? `0 0 30px ${color}60`
+          : isHighlighted
+          ? `0 0 20px ${color}40`
+          : undefined,
       }}
     >
       <Handle
         type="target"
         position={Position.Top}
-        className="!w-3 !h-3 !bg-slate-500"
+        className="!w-2.5 !h-2.5 !bg-slate-400"
       />
       <div className="flex items-center gap-2">
         <div
           className="p-1.5 rounded-lg flex items-center justify-center"
-          style={{ backgroundColor: `${color}20` }}
+          style={{ backgroundColor: `${color}25` }}
         >
-          <Icon size={14} style={{ color: color }} />
+          <Icon size={14} style={{ color }} />
         </div>
-        <span className="text-xs font-semibold text-white">{data.label}</span>
+        <span className="text-xs font-semibold text-white truncate max-w-[120px]">
+          {data.label}
+        </span>
       </div>
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-3 !h-3 !bg-slate-500"
+        className="!w-2.5 !h-2.5 !bg-slate-400"
       />
     </div>
   );
@@ -154,21 +170,46 @@ const nodeTypes = {
 };
 
 // --- Main Component ---
-
 function MemoryGraphContent() {
   // --- State ---
   const [apiNodes, setApiNodes] = useState<any[]>([]);
   const [apiEdges, setApiEdges] = useState<any[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [graphStats, setGraphStats] = useState<GraphStats | null>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [nodes, setNodes, onNodesChangeInternal] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
+  // Custom onNodesChange to detect drag events and stop simulation
+  const onNodesChange = useCallback(
+    (changes: any) => {
+      // Check if any node is being dragged
+      const isDragging = changes.some(
+        (c: any) =>
+          c.type === "position" && (c.dragging || c.dragging === undefined)
+      );
+      if (isDragging && !isDraggingRef.current) {
+        isDraggingRef.current = true;
+        simulationRef.current?.stop();
+      }
+      onNodesChangeInternal(changes);
+    },
+    [onNodesChangeInternal]
+  );
   const [selectedNode, setSelectedNode] = useState<any | null>(null);
   const [selectedRelatedMemories, setSelectedRelatedMemories] =
     useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  
+  // Refs for force simulation
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const simulationRef = useRef<any>(null);
+  const tickingRef = useRef(false);
+  const ticksRunRef = useRef(0);
+  const isDraggingRef = useRef(false);
 
   // --- Fetch Data ---
   const fetchData = useCallback(async () => {
@@ -188,10 +229,15 @@ function MemoryGraphContent() {
         id: node.id,
         type: "custom",
         position: {
-          x: 300 + (idx % 8) * 120,
-          y: 200 + Math.floor(idx / 8) * 120,
+          x: 200 + Math.random() * 400,
+          y: 200 + Math.random() * 400,
         },
-        data: { label: node.label, type: node.type },
+        data: { 
+          label: node.label, 
+          type: node.type,
+          description: node.description,
+          date: node.date,
+        },
       }));
 
       const initialEdges: Edge[] = graphData.edges.map((edge: any, idx: number) => ({
@@ -202,24 +248,80 @@ function MemoryGraphContent() {
         animated: true,
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: "#a78bfa",
+          color: "#A855F7",
         },
         label: edge.label,
         labelStyle: {
           fill: "#94a3b8",
           fontSize: "10px",
+          fontWeight: 500,
         },
-        style: { stroke: "#6c5ce7", strokeWidth: 2 },
+        style: { stroke: "#6C5CE7", strokeWidth: 2 },
       }));
 
       setNodes(initialNodes);
       setEdges(initialEdges);
+      setInitialDataLoaded(true);
     } catch (e) {
       console.error("Failed to fetch graph data", e);
     } finally {
       setIsLoading(false);
     }
   }, [setNodes, setEdges]);
+
+  // --- Force Simulation ---
+  useEffect(() => {
+    if (!initialDataLoaded || !nodes.length) return;
+
+    ticksRunRef.current = 0;
+    isDraggingRef.current = false;
+
+    // Create force simulation
+    simulationRef.current = forceSimulation(nodes as any)
+      .force(
+        "link",
+        forceLink(edges as any)
+          .id((d: any) => d.id)
+          .distance(120)
+          .strength(0.5)
+      )
+      .force("charge", forceManyBody().strength(-400))
+      .force("center", forceCenter(600, 400)) // Fixed center coordinates
+      .force("collide", forceCollide().radius(60))
+      .on("tick", () => {
+        if (!tickingRef.current && !isDraggingRef.current) {
+          window.requestAnimationFrame(() => {
+            if (ticksRunRef.current >= 300 || isDraggingRef.current) {
+              simulationRef.current?.stop();
+              return;
+            }
+            setNodes((nds) =>
+              nds.map((node) => {
+                const simNode = (simulationRef.current.nodes() as any[]).find(
+                  (n: any) => n.id === node.id
+                );
+                return {
+                  ...node,
+                  position: {
+                    x: simNode.x,
+                    y: simNode.y,
+                  },
+                };
+              })
+            );
+            ticksRunRef.current++;
+            tickingRef.current = false;
+          });
+          tickingRef.current = true;
+        }
+      });
+
+    return () => {
+      if (simulationRef.current) {
+        simulationRef.current.stop();
+      }
+    };
+  }, [initialDataLoaded, setNodes]);
 
   // --- Effects ---
   useEffect(() => {
@@ -234,7 +336,7 @@ function MemoryGraphContent() {
           {
             ...params,
             animated: true,
-            markerEnd: { type: MarkerType.ArrowClosed, color: "#a78bfa" },
+            markerEnd: { type: MarkerType.ArrowClosed, color: "#A855F7" },
           },
           eds
         )
@@ -267,15 +369,36 @@ function MemoryGraphContent() {
     }
   };
 
+  const centerOnNode = (nodeId: string) => {
+    if (reactFlowInstance) {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (node) {
+        reactFlowInstance.fitView({ nodes: [node], duration: 800, padding: 0.3 });
+      }
+    }
+  };
+
+  const askEvolve = async (label: string) => {
+    // This will navigate to ask page, but for now just open chat with prefilled query
+    window.location.href = `/ask?q=${encodeURIComponent(`Tell me more about ${label}`)}`;
+  };
+
   // --- Derived State ---
   const { filteredNodes, filteredEdges } = useMemo(() => {
     // If no filters, return all
     if (!searchQuery && activeFilters.length === 0 && !selectedNode) {
-      return { filteredNodes: nodes, filteredEdges: edges };
+      return { 
+        filteredNodes: nodes.map((n) => ({
+          ...n,
+          data: { ...n.data, isHighlighted: false }
+        })), 
+        filteredEdges: edges 
+      };
     }
 
-    // First find which nodes to keep
+    // First find which nodes to keep/highlight
     const keptNodeIds = new Set<string>();
+    const highlightedNodeIds = new Set<string>();
     const filteredApiNodes = apiNodes.filter((node) => {
       let matches = true;
       if (searchQuery) {
@@ -286,17 +409,23 @@ function MemoryGraphContent() {
       }
       return matches;
     });
-    filteredApiNodes.forEach((n) => keptNodeIds.add(n.id));
+    filteredApiNodes.forEach((n) => {
+      keptNodeIds.add(n.id);
+      highlightedNodeIds.add(n.id);
+    });
 
     // Add selected node and neighbors
     if (selectedNode) {
       keptNodeIds.add(selectedNode.id);
+      highlightedNodeIds.add(selectedNode.id);
       apiEdges.forEach((e) => {
         if (e.source === selectedNode.id) {
           keptNodeIds.add(e.target);
+          highlightedNodeIds.add(e.target);
         }
         if (e.target === selectedNode.id) {
           keptNodeIds.add(e.source);
+          highlightedNodeIds.add(e.source);
         }
       });
     }
@@ -304,10 +433,13 @@ function MemoryGraphContent() {
     // Now filter nodes and edges
     const filteredNodes = nodes.map((node) => ({
       ...node,
-      data: { ...node.data },
+      data: { 
+        ...node.data, 
+        isHighlighted: highlightedNodeIds.has(node.id)
+      },
       style: {
         ...node.style,
-        opacity: keptNodeIds.has(node.id) ? 1 : 0.1,
+        opacity: keptNodeIds.has(node.id) ? 1 : 0.15,
       },
     }));
 
@@ -335,7 +467,7 @@ function MemoryGraphContent() {
     <AppLayout>
       <div className="flex h-screen bg-[#020617]">
         {/* --- Main Graph Area --- */}
-        <div className="flex-1 flex flex-col">
+        <div ref={reactFlowWrapper} className="flex-1 flex flex-col">
           {/* Top Header Panel */}
           <div className="flex items-center justify-between px-8 py-5 border-b border-slate-800 bg-[#020617]/80 backdrop-blur-sm z-10">
             <div>
@@ -393,6 +525,7 @@ function MemoryGraphContent() {
               className="bg-[#020617]"
               minZoom={0.2}
               maxZoom={4}
+              onInit={setReactFlowInstance}
             >
               <Background
                 color="#334155"
@@ -402,7 +535,7 @@ function MemoryGraphContent() {
               <Controls className="bg-slate-900/90 backdrop-blur-sm border border-slate-700 text-white shadow-xl" />
               <MiniMap
                 nodeColor={(n) =>
-                  NODE_COLORS[(n.data as any).type] || "#94a3b8"
+                  NODE_COLORS[(n.data as any).type] || "#6B7280"
                 }
                 className="bg-slate-900/90 backdrop-blur-sm border border-slate-700 rounded-xl shadow-xl"
               />
@@ -415,7 +548,11 @@ function MemoryGraphContent() {
           <div className="p-6 space-y-6">
             {/* 1. Stats Panel */}
             {graphStats && (
-              <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-xl bg-slate-800/50 border border-slate-700 shadow-lg"
+              >
                 <div className="flex items-center gap-2 mb-4">
                   <BarChart3 size={16} className="text-violet-400" />
                   <h3 className="text-sm font-semibold text-white">Graph Stats</h3>
@@ -455,7 +592,7 @@ function MemoryGraphContent() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {/* 2. Filters Panel */}
@@ -495,9 +632,9 @@ function MemoryGraphContent() {
               {selectedNode ? (
                 <motion.div
                   key="details"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
                   className="space-y-4"
                 >
                   <div className="flex items-center gap-3">
@@ -506,54 +643,103 @@ function MemoryGraphContent() {
                         NODE_ICONS[selectedNode.type] || Sparkles;
                       return (
                         <div
-                          className="p-2 rounded-xl"
+                          className="p-3 rounded-2xl"
                           style={{
                             backgroundColor:
                               (NODE_COLORS[selectedNode.type] ||
-                                "#94a3b8") + "20",
+                                "#6B7280") + "25",
                           }}
                         >
                           <Icon
-                            size={20}
+                            size={24}
                             style={{
                               color:
                                 NODE_COLORS[selectedNode.type] ||
-                                "#94a3b8",
+                                "#6B7280",
                             }}
                           />
                         </div>
                       );
                     })()}
-                    <div>
-                      <p className="text-sm font-bold text-white">
+                    <div className="flex-1">
+                      <p className="text-base font-bold text-white">
                         {selectedNode.label}
                       </p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-400 flex items-center gap-1">
+                        <Layers size={12} />
                         {selectedNode.type}
                       </p>
+                      {selectedNode.date && (
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          {selectedNode.date}
+                        </p>
+                      )}
                     </div>
                   </div>
 
+                  {/* Description */}
+                  {selectedNode.description && (
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                        Description
+                      </p>
+                      <p className="text-xs text-slate-300">
+                        {selectedNode.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => centerOnNode(selectedNode.id)}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-medium text-white hover:bg-slate-700 transition-all"
+                    >
+                      <ZoomIn size={12} />
+                      Center Graph
+                    </button>
+                    <button
+                      onClick={() => askEvolve(selectedNode.label)}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-xs font-medium text-white transition-all"
+                    >
+                      <MessageSquare size={12} />
+                      Ask EVOLVE
+                    </button>
+                    <button
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-medium text-white hover:bg-slate-700 transition-all"
+                    >
+                      <ExternalLink size={12} />
+                      Open Source
+                    </button>
+                    <button
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-medium text-white hover:bg-slate-700 transition-all"
+                    >
+                      <Brain size={12} />
+                      Show Related
+                    </button>
+                  </div>
+
+                  {/* Relationships */}
                   {selectedRelatedMemories &&
                     selectedRelatedMemories.edges.length > 0 && (
                       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                          Relationships
+                          Connected Nodes
                         </p>
                         <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
                           {selectedRelatedMemories.edges.map(
                             (edge: any, idx: number) => (
                               <div
                                 key={idx}
-                                className="bg-slate-800 px-3 py-2.5 text-xs rounded-lg border border-slate-700"
+                                className="bg-slate-800 px-3 py-2.5 text-xs rounded-lg border border-slate-700 flex items-center gap-2"
                               >
-                                <span className="text-white">
+                                <span className="text-white font-medium">
                                   {edge.source_name}
-                                </span>{" "}
-                                <span className="text-violet-400 font-medium">
+                                </span>
+                                <span className="text-violet-400 text-[10px] px-1.5 py-0.5 rounded bg-violet-900/30">
                                   {edge.type}
-                                </span>{" "}
-                                <span className="text-white">
+                                </span>
+                                <span className="text-white font-medium">
                                   {edge.target_name}
                                 </span>
                               </div>
@@ -563,6 +749,7 @@ function MemoryGraphContent() {
                       </div>
                     )}
 
+                  {/* Connected Memories */}
                   {selectedRelatedMemories &&
                     selectedRelatedMemories.memories.length > 0 && (
                       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
@@ -583,10 +770,10 @@ function MemoryGraphContent() {
                                       style={{
                                         backgroundColor:
                                           (NODE_COLORS[mem.type] ||
-                                            "#94a3b8") + "20",
+                                            "#6B7280") + "20",
                                         color:
                                           NODE_COLORS[mem.type] ||
-                                          "#94a3b8",
+                                          "#6B7280",
                                       }}
                                     >
                                       {mem.type}
@@ -621,6 +808,7 @@ function MemoryGraphContent() {
                   animate={{ opacity: 1 }}
                   className="text-center py-10 text-slate-400 text-xs"
                 >
+                  <Sparkles size={32} className="mx-auto mb-3 text-slate-600" />
                   Click a node on the graph to view details
                 </motion.div>
               )}
