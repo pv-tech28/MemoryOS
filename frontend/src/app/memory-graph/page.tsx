@@ -51,6 +51,9 @@ import {
   Brain,
   ZoomIn,
   Layers,
+  Maximize2,
+  Download,
+  Focus,
 } from "lucide-react";
 import {
   getMemoryGraph,
@@ -277,8 +280,16 @@ function MemoryGraphContent() {
     ticksRunRef.current = 0;
     isDraggingRef.current = false;
 
-    // Create force simulation
-    simulationRef.current = forceSimulation(nodes as any)
+    // Create force simulation - prepare nodes for d3-force (add x,y,vx,vy if needed)
+    const simNodes = nodes.map((node) => ({
+      ...node,
+      x: node.position.x,
+      y: node.position.y,
+      vx: 0,
+      vy: 0,
+    }));
+
+    simulationRef.current = forceSimulation(simNodes)
       .force(
         "link",
         forceLink(edges as any)
@@ -301,6 +312,7 @@ function MemoryGraphContent() {
                 const simNode = (simulationRef.current.nodes() as any[]).find(
                   (n: any) => n.id === node.id
                 );
+                if (!simNode) return node;
                 return {
                   ...node,
                   position: {
@@ -382,6 +394,86 @@ function MemoryGraphContent() {
   const askEvolve = async (label: string) => {
     // This will navigate to ask page, but for now just open chat with prefilled query
     window.location.href = `/ask?q=${encodeURIComponent(`Tell me more about ${label}`)}`;
+  };
+
+  const resetLayout = () => {
+    setNodes((prevNodes) =>
+      prevNodes.map((node, idx) => ({
+        ...node,
+        position: {
+          x: 200 + Math.random() * 400,
+          y: 200 + Math.random() * 400,
+        },
+      }))
+    );
+    // Restart simulation
+    isDraggingRef.current = false;
+    ticksRunRef.current = 0;
+    const simNodes = nodes.map((node) => ({
+      ...node,
+      x: node.position.x,
+      y: node.position.y,
+      vx: 0,
+      vy: 0,
+    }));
+    simulationRef.current = forceSimulation(simNodes)
+      .force(
+        "link",
+        forceLink(edges as any)
+          .id((d: any) => d.id)
+          .distance(120)
+          .strength(0.5)
+      )
+      .force("charge", forceManyBody().strength(-400))
+      .force("center", forceCenter(600, 400))
+      .force("collide", forceCollide().radius(60))
+      .on("tick", () => {
+        if (!tickingRef.current && !isDraggingRef.current) {
+          window.requestAnimationFrame(() => {
+            if (ticksRunRef.current >= 300 || isDraggingRef.current) {
+              simulationRef.current?.stop();
+              return;
+            }
+            setNodes((nds) =>
+              nds.map((node) => {
+                const simNode = (simulationRef.current.nodes() as any[]).find(
+                  (n: any) => n.id === node.id
+                );
+                if (!simNode) return node;
+                return {
+                  ...node,
+                  position: {
+                    x: simNode.x,
+                    y: simNode.y,
+                  },
+                };
+              })
+            );
+            ticksRunRef.current++;
+            tickingRef.current = false;
+          });
+          tickingRef.current = true;
+        }
+      });
+  };
+
+  const fitScreen = () => {
+    if (reactFlowInstance) {
+      reactFlowInstance.fitView({ padding: 0.2, duration: 800 });
+    }
+  };
+
+  const centerGraph = () => {
+    if (reactFlowInstance) {
+      reactFlowInstance.setCenter(600, 400, { zoom: 1, duration: 500 });
+    }
+  };
+
+  const exportPNG = () => {
+    if (reactFlowInstance) {
+      // Simple export (real implementation would be more complex)
+      alert("Export PNG functionality coming soon!");
+    }
   };
 
   // --- Derived State ---
@@ -481,7 +573,7 @@ function MemoryGraphContent() {
               </p>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {/* Search Bar */}
               <div className="relative">
                 <Search
@@ -497,18 +589,48 @@ function MemoryGraphContent() {
                 />
               </div>
 
-              <button
-                onClick={fetchData}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-[1.02] bg-slate-800 border border-slate-700 text-white hover:bg-slate-700"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <RefreshCw size={14} className="animate-spin" />
-                ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={centerGraph}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all hover:scale-[1.02] bg-slate-800 border border-slate-700 text-white hover:bg-slate-700"
+                >
+                  <Focus size={14} />
+                  Center
+                </button>
+                <button
+                  onClick={resetLayout}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all hover:scale-[1.02] bg-slate-800 border border-slate-700 text-white hover:bg-slate-700"
+                >
                   <RefreshCw size={14} />
-                )}
-                Refresh
-              </button>
+                  Reset
+                </button>
+                <button
+                  onClick={fitScreen}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all hover:scale-[1.02] bg-slate-800 border border-slate-700 text-white hover:bg-slate-700"
+                >
+                  <Maximize2 size={14} />
+                  Fit
+                </button>
+                <button
+                  onClick={exportPNG}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all hover:scale-[1.02] bg-slate-800 border border-slate-700 text-white hover:bg-slate-700"
+                >
+                  <Download size={14} />
+                  Export
+                </button>
+                <button
+                  onClick={fetchData}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-[1.02] bg-violet-600 border border-violet-500 text-white hover:bg-violet-700"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <RefreshCw size={14} />
+                  )}
+                  Refresh
+                </button>
+              </div>
             </div>
           </div>
 
