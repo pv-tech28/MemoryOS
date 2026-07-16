@@ -31,5 +31,27 @@
     "related_document": null,
     "related_memory": "3575c128-fa25-4563-b761-12cd529bbc38",
     "related_graph_node": null
+  },
+  {
+    "id": "3be436d3-2961-412e-a406-19851de2a5bd",
+    "title": "Ask EVOLVE: explain when email come",
+    "description": "AI answered your question in 16.80s.",
+    "timestamp": "2026-07-15T22:34:02.647456",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
+  },
+  {
+    "id": "0c737ca0-1c94-46e4-8f85-4dbe4de29446",
+    "title": "Ask EVOLVE: Show related documents",
+    "description": "AI answered your question in 10.69s.",
+    "timestamp": "2026-07-15T22:34:36.539632",
+    "event_type": "chat",
+    "color": "#00d68f",
+    "related_document": null,
+    "related_memory": null,
+    "related_graph_node": null
   }
 ]
