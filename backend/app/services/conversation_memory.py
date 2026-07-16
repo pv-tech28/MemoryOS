@@ -1,31 +1,30 @@
+"""
+Conversation Memory Service — now backed by PostgreSQL via ChatRepository.
+Preserves identical function signatures so chat.py router requires zero changes.
+"""
 
-"""
-Conversation Memory Service
-Stores and retrieves chat history for the EVOLVE AI chat.
-"""
-import os
-import json
-import uuid
-from datetime import datetime
 from typing import Optional, List, Dict, Any
-from dotenv import load_dotenv
+from app.database import SessionLocal
+from app.repositories.chat_repo import ChatRepository
 
-load_dotenv()
 
-# Memory storage (in-memory for now, can switch to DB later)
-# Structure: { chat_id: { document_id: str | None, messages: [ ... ] } }
-_chat_memory: Dict[str, Dict[str, Any]] = {}
+def _get_db():
+    """Get a new database session for standalone service calls."""
+    return SessionLocal()
 
 
 def create_chat(document_id: Optional[str] = None) -> str:
     """Create a new chat session and return its ID."""
-    chat_id = str(uuid.uuid4())
-    _chat_memory[chat_id] = {
-        "document_id": document_id,
-        "messages": [],
-        "created_at": datetime.now().isoformat(),
-    }
-    return chat_id
+    db = _get_db()
+    try:
+        chat_id = ChatRepository.create_chat(db, document_id)
+        db.commit()
+        return chat_id
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def save_message(
@@ -38,46 +37,61 @@ def save_message(
     processing_time: Optional[float] = None,
 ) -> None:
     """Save a message to the chat history."""
-    if chat_id not in _chat_memory:
-        # Create chat if it doesn't exist
-        create_chat()
-
-    message = {
-        "role": role,
-        "content": content,
-        "timestamp": datetime.now().isoformat(),
-        "sources": sources or [],
-        "confidence": confidence,
-        "document_name": document_name,
-        "processing_time": processing_time,
-    }
-    _chat_memory[chat_id]["messages"].append(message)
+    db = _get_db()
+    try:
+        ChatRepository.save_message(
+            db, chat_id, role, content,
+            sources, confidence, document_name, processing_time,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def get_chat_history(chat_id: str, limit: int = 10) -> List[Dict[str, Any]]:
     """Retrieve the last N messages from the chat history."""
-    if chat_id not in _chat_memory:
-        return []
-    # Return the last 'limit' messages
-    return _chat_memory[chat_id]["messages"][-limit:]
+    db = _get_db()
+    try:
+        return ChatRepository.get_history(db, chat_id, limit)
+    finally:
+        db.close()
 
 
 def get_full_chat(chat_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve the full chat object."""
-    return _chat_memory.get(chat_id)
+    db = _get_db()
+    try:
+        return ChatRepository.get_full_chat(db, chat_id)
+    finally:
+        db.close()
 
 
 def clear_chat(chat_id: str) -> bool:
     """Clear all messages from a specific chat."""
-    if chat_id in _chat_memory:
-        _chat_memory[chat_id]["messages"] = []
-        return True
-    return False
+    db = _get_db()
+    try:
+        result = ChatRepository.clear_chat(db, chat_id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def delete_chat(chat_id: str) -> bool:
-    """Delete a chat entirely from memory."""
-    if chat_id in _chat_memory:
-        del _chat_memory[chat_id]
-        return True
-    return False
+    """Delete a chat entirely."""
+    db = _get_db()
+    try:
+        result = ChatRepository.delete_chat(db, chat_id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

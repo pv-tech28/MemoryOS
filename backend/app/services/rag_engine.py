@@ -14,6 +14,9 @@ from app.services.vector_store import search as vector_search
 from app.services.memory_store import get_relevant_memories
 from app.services.memory_intelligence import get_personalized_context, build_memory_intelligence_prompt
 from app.services.llm import get_llm_provider
+from app.database import SessionLocal
+from app.repositories.document_repo import DocumentRepository
+
 
 load_dotenv()
 
@@ -185,15 +188,15 @@ def query(
     memory_ids = [mem["id"] for mem in memory_context.get("memories", [])]
 
     # Load metadata to categorize sources
-    import json
-    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
-    METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
+    db = SessionLocal()
     all_metadata = {}
     try:
-        with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
-            all_metadata = json.load(f)
-    except:
-        pass
+        all_metadata = DocumentRepository.to_metadata_dict(db, user_id="default_user")
+    except Exception as e:
+        print(f"[RAG] Error loading metadata from DB: {e}")
+    finally:
+        db.close()
+
 
     # Categorize related sources
     related_documents = []
