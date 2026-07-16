@@ -4,101 +4,65 @@
 
 --- 
 
-# 📋 Current Status (What We've Done)
+# 📋 Current Status (What We've Done & How)
 
-We've built the core foundational features of EVOLVE AI! Here's everything we've accomplished step by step:
-
----
-
-# 🏗️ Step 1: Project Setup & Initial Configuration
-
-## ✅ Backend Setup
-- Created [backend/](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/) directory with Python 3.12
-- Configured virtual environment ([backend/.venv/](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/.venv/))
-- Set up [requirements.txt](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/requirements.txt) with all necessary dependencies
-- Configured [.env](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/.env) for Gemini API key and environment variables
-
-## ✅ Frontend Setup
-- Created [frontend/](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/) directory with Next.js 15+
-- Set up React + TypeScript + Tailwind CSS
-- Configured [package.json](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/package.json) with dependencies
-- Added Framer Motion for animations
-
-## ✅ Gitignore Configuration
-- Updated [.gitignore](file:///c:/Users/Lenovo/Desktop/MemoryOS/.gitignore) to ignore temporary files (venv, chroma_db, uploads, .next, etc.)
+We've built out the core of MemoryOS (EVOLVE AI)! Below is a comprehensive list of what has been implemented, how it works, and what is remaining.
 
 ---
 
-# 🔧 Step 2: Backend Core Development
+# 🏗️ Architectural Overview & Core Implementations
 
-## ✅ FastAPI Application
-- [backend/app/main.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/main.py): Main FastAPI app with CORS middleware
-  - Allowed origins for localhost ports 3000, 3001, and 3002
-  - Registered all routers (documents, chat, memory graph)
+## 1. 🧠 Memory Intelligence Layer & RAG Pipeline
+- **Orchestration Layer (`backend/app/services/memory_intelligence.py`)**: Intercepts requests between the user and the LLM. It aggregates data from three distinct sources (ChromaDB Vector Store, SQLite Long-Term Memory, and the NetworkX Knowledge Graph) to compile a rich, personalized prompt context.
+- **RAG Engine (`backend/app/services/rag_engine.py`)**: 
+  - Retrieves contextual semantic text chunks from the vector database.
+  - Automatically queries Google Gemini (or OpenRouter as a fallback) with the customized intelligence prompt.
+  - Parses confidence scores (`[CONFIDENCE: X.X]`) out of the model's text response and binds citations to the UI.
+- **Unified Chat Router (`backend/app/routers/chat.py`)**: Manages chat sessions, saves conversation history using SQLite-backed structures, and triggers background memory extraction.
 
-## ✅ Document Processing Pipeline
-- [backend/app/services/pdf_parser.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/pdf_parser.py): PDF file parsing using PyMuPDF
-- [backend/app/services/chunker.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/chunker.py): Text chunking (splits large docs into 1000-token chunks)
-- [backend/app/services/embeddings.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/embeddings.py): Embedding generation using sentence-transformers/all-MiniLM-L6-v2
-- [backend/app/services/vector_store.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/vector_store.py): ChromaDB integration for vector storage and search
+## 2. 🗄️ SQLite Long-Term Memory Vault
+- **Memory Store (`backend/app/services/memory_store.py`)**: Persists structured user facts into an SQLite database (`memory_db.sqlite`).
+- **Category Classification**: Classifies memories into categories: `personal`, `goal`, `project`, `preference`, `skill`, `deadline`, `task`, `education`, `career`, or `custom`.
+- **Decay & Importance Scoring**: Tracks memory metrics like `importance` (0.0 to 1.0), `access_count`, and `last_accessed` timestamp. Importance gets updated and boosted dynamically when repeated topics are discussed.
+- **Memory Extraction (`backend/app/services/memory_extractor.py`)**: Uses LLM prompts to analyze chat histories, auto-extract important facts, filter casual small talk, and save them as memories in the SQLite DB and update the NetworkX graph.
 
-## ✅ RAG (Retrieval-Augmented Generation) Engine
-- [backend/app/services/rag_engine.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/services/rag_engine.py): RAG implementation
-  - **Fixed timeout issue**: Increased Gemini API timeout to 2 minutes (120 seconds)
-  - Uses Google Gemini API for LLM responses
-  - Combines retrieved context from vector store
-  - Provides source citations and confidence scores
+## 3. 🌐 Semantic Knowledge Graph (NetworkX)
+- **Graph Builder (`backend/app/services/memory_graph_builder.py`)**: Manages a directed graph of entity nodes (types like `Person`, `Project`, `Technology`, `Skill`, `Email`, `Document`, `Event`, `Concept`) and semantic relationships (`works_at`, `mentions`, `belongs_to`, `attends`, `related_to`, etc.) in `knowledge_graph.json`.
+- **Dynamic Entity Extraction**: Automatically extracts entities and relationships from newly uploaded files and conversations using the Gemini API.
+- **Advanced Graph UI (`frontend/src/app/memory-graph/page.tsx`)**:
+  - Employs a stunning, interactive force-directed graph visualizer using dynamic drag-and-drop.
+  - Renders node sizes based on their dynamic importance and edge line thickness based on their relationship strength.
+  - Provides a visual filter system and an interactive side-drawer component showing details, connections, and related memories for any selected node.
 
-## ✅ Backend Routers
-1. **[backend/app/routers/documents.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/routers/documents.py)**:
-   - Upload PDF files
-   - List all uploaded documents
-   - Delete documents
-2. **[backend/app/routers/chat.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/routers/chat.py)**:
-   - Chat with your documents using RAG
-3. **[backend/app/routers/memory_graph.py](file:///c:/Users/Lenovo/Desktop/MemoryOS/backend/app/routers/memory_graph.py)**:
-   - Generate dynamic memory graph data
-   - Connects user node with all uploaded documents
+## 4. 🔌 External Integrations Sync & Google OAuth2
+- **OAuth2 Authenticator (`backend/app/routers/auth.py`)**: Handles full authentication callbacks for Google services, saving offline credentials locally at `google_credentials.json`.
+- **Third-Party Syncing (`backend/app/routers/sources.py`)**:
+  - **Gmail Sync**: Pulls recent emails, parses subject/body details, embeds content, and writes nodes and relationship paths into the knowledge graph.
+  - **Google Drive Sync**: Ingests files, parses PDFs via PyMuPDF (`pdf_parser.py`), chunks content (`chunker.py`), and embeds/stores them in the vector store.
+  - **Google Calendar Sync**: Imports scheduled meetings/events, indexes description/metadata, and connects event entities.
+- **Sources Control Panel (`frontend/src/app/sources/page.tsx`)**: Fully interactive page supporting manual drag-and-drop PDF uploads and individual triggers to sync Gmail, Google Drive, and Google Calendar.
 
----
-
-# 🎨 Step 3: Frontend UI Development
-
-## ✅ Layout & Navigation
-- [frontend/src/components/layout/AppLayout.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/components/layout/AppLayout.tsx): Main app layout with sidebar
-- [frontend/src/components/layout/Sidebar.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/components/layout/Sidebar.tsx): Sidebar navigation with links to all pages
-
-## ✅ Frontend Pages
-1. **[frontend/src/app/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/page.tsx)**: Home/Dashboard page
-2. **[frontend/src/app/ask/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/ask/page.tsx)**: AI Chat page (chat with your docs!)
-3. **[frontend/src/app/sources/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/sources/page.tsx)**: Sources/Uploads page
-4. **[frontend/src/app/memory-graph/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/memory-graph/page.tsx)**: Interactive memory graph visualization
-5. **[frontend/src/app/timeline/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/timeline/page.tsx)**: Timeline page (placeholder for now)
-6. **[frontend/src/app/files/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/files/page.tsx)**: Files page
-7. **[frontend/src/app/daily-summary/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/daily-summary/page.tsx)**: Daily summary page
-8. **[frontend/src/app/settings/page.tsx](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/app/settings/page.tsx)**: Settings page
-
-## ✅ Frontend API Client
-- [frontend/src/lib/api.ts](file:///c:/Users/Lenovo/Desktop/MemoryOS/frontend/src/lib/api.ts): API client to communicate with backend
-  - **Fixed API calls**: Uses direct base URL `http://localhost:8000/api` instead of relative path
+## 5. 📅 Interactive Timeline Track
+- **Timeline Engine (`backend/app/services/timeline_service.py`)**: Writes system events (e.g. chats, file uploads, memory creation, Gmail/Drive syncs) to a JSON events store (`timeline_events.json`).
+- **Timeline Page (`frontend/src/app/timeline/page.tsx`)**: Renders a beautiful visual timeline, grouping events chronologically by day, applying type-specific color codes, and supporting timeline item deletion.
 
 ---
 
 # 🛠️ Tech Stack We're Using
 
-| Category | Technology |
-|----------|------------|
-| **Backend Framework** | FastAPI |
-| **Backend Language** | Python 3.12 |
-| **Frontend Framework** | Next.js 15+ |
-| **Frontend Language** | TypeScript |
-| **Styling** | Tailwind CSS |
-| **Animations** | Framer Motion |
-| **LLM** | Google Gemini (via google-generativeai) |
-| **Embeddings** | sentence-transformers/all-MiniLM-L6-v2 |
-| **Vector Database** | ChromaDB |
-| **PDF Parsing** | PyMuPDF |
-| **Git Remote** | https://github.com/pv-tech28/MemoryOS.git |
+| Category | Technology | Description |
+|----------|------------|-------------|
+| **Backend Framework** | FastAPI | High-performance Python API framework |
+| **Backend Database** | SQLite | Serverless SQL DB for memories & chats |
+| **Vector Database** | ChromaDB | Local vector store for document embeddings |
+| **Graph Abstraction** | NetworkX | Local graph library, persisted as JSON |
+| **LLM Provider** | Google Gemini / OpenRouter | API endpoints for memory and answer generation |
+| **Embeddings** | sentence-transformers | `all-MiniLM-L6-v2` for generating dense embeddings locally |
+| **PDF Extraction** | PyMuPDF (fitz) | High-speed PDF text ingestion |
+| **Frontend Framework**| Next.js 15+ | App router layout, React, TypeScript |
+| **Styling** | Tailwind CSS | Utility-first styling with custom dark-mode vars |
+| **Animations** | Framer Motion | Smooth component transitions and visual effects |
+| **Git Remote** | https://github.com/pv-tech28/MemoryOS.git | Primary repo |
 
 ---
 
@@ -123,9 +87,10 @@ python -m venv .venv
 # Install dependencies (if not already installed)
 pip install -r requirements.txt
 
-# Configure .env file with your Gemini API key
-# Make sure backend/.env has:
+# Configure .env file with your Gemini API key and settings
+# Make sure backend/.env has at least:
 # GEMINI_API_KEY=your_gemini_api_key_here
+# MEMORY_EXTRACTION_ENABLED=true
 
 # Run the FastAPI backend server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -137,40 +102,27 @@ Backend will be running at: http://localhost:8000
 # Open a new terminal, navigate to frontend directory
 cd frontend
 
-# Install dependencies (if not already installed)
+# Install dependencies
 npm install
 
 # Run Next.js dev server
 npm run dev
 ```
-Frontend will be running at one of:
-- http://localhost:3000
-- http://localhost:3001
-- http://localhost:3002
+Frontend will be running at: http://localhost:3000
 
-## Step 3: Use the App!
-1. Go to http://localhost:3002/ask
-2. Upload a PDF document (Sources page)
-3. Ask questions about your document in the chat!
-4. View your memory graph at http://localhost:3002/memory-graph
+## Step 3: Set Up Google Integrations (Gmail, Drive, Calendar)
 
-## Google Cloud Setup (for Gmail, Drive, Calendar Integrations)
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project
-2. Enable the following APIs:
-   - Gmail API
-   - Google Drive API
-   - Google Calendar API
-3. Go to **APIs & Services > Credentials** and create OAuth 2.0 Client IDs
-4. Add the following authorized redirect URIs:
-   - http://localhost:8000/api/auth/google/callback
-5. Save your `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
-6. Add these to your `backend/.env` file:
-   ```
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project.
+2. Enable the **Gmail API**, **Google Drive API**, and **Google Calendar API**.
+3. Create OAuth 2.0 Client Credentials with redirect URI:
+   - `http://localhost:8000/api/auth/google/callback`
+4. Add the generated keys into your `backend/.env` file:
+   ```env
    GOOGLE_CLIENT_ID=your_client_id_here
    GOOGLE_CLIENT_SECRET=your_client_secret_here
    GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
    ```
+5. Navigate to `http://localhost:3000/sources` on the frontend, click **Sync** on any Google integration to perform authentication.
 
 ---
 
@@ -179,34 +131,25 @@ Frontend will be running at one of:
 Here's everything still left to implement to complete EVOLVE AI:
 
 ## Phase 1: Core Enhancements (High Priority)
-- [ ] **Authentication System**: User login/signup (Google OAuth initially)
-- [ ] **Proper Database**: Replace file-based metadata storage with PostgreSQL
-- [ ] **Persistence**: Make sure data (uploads, vector DB) persists across server restarts properly
-- [ ] **Timeline Page**: Implement actual timeline view of document uploads and events
-- [ ] **Daily Summary Page**: Generate daily AI summaries of your activity
+- [ ] **Multi-User Authentication**: Proper signup/login security flow (JWT session-based) for frontend users.
+- [ ] **PostgreSQL Database Integration**: Migrate from SQLite and `_metadata.json` to PostgreSQL to handle relational user records, document lists, and chat logs robustly.
+- [ ] **Live Daily Summary Page**: Replace frontend static summary mocks (`daily-summary/page.tsx`) with an LLM-driven backend API that constructs structured daily highlights, activity stats, and AI memory insights from user actions.
 
 ## Phase 2: Source Integrations (Medium Priority)
-- [ ] **Gmail Integration**: Connect Gmail to import emails
-- [ ] **Google Drive Integration**: Connect Drive to import files
-- [ ] **Google Calendar Integration**: Connect Calendar to import events
-- [ ] **GitHub Integration**: Connect GitHub to import commits and repos
-- [ ] **WhatsApp Backup Import**: Import WhatsApp chat backups
-- [ ] **Image Uploads + OCR**: Upload images and extract text with OCR
-- [ ] **Audio Uploads + Speech Recognition**: Upload audio files and transcribe with Whisper
+- [ ] **GitHub Integration**: Connect to GitHub OAuth to index repository structures, commits, and pull requests.
+- [ ] **WhatsApp Ingestion**: Support parsing of exported WhatsApp chat backup files to extract structured personal memories.
+- [ ] **Image Uploads + OCR**: Integrate Tesseract OCR or Gemini Vision API to parse uploaded images.
+- [ ] **Audio Uploads + Speech-to-Text**: Implement audio file transcription using Whisper API to ingest voice notes.
 
-## Phase 3: Advanced Features (High Priority)
-- [ ] **Full Knowledge Graph**: Build true knowledge graph with relationships (using Neo4j instead of simple node-edge)
-- [ ] **Multi-source Search**: Search across all connected sources at once
-- [ ] **Better UI/UX**: Improve design, add loading states, error messages
-- [ ] **Proper Error Handling**: Handle API errors, timeout errors, file errors gracefully
-- [ ] **Progress Bars**: Show upload/processing progress
+## Phase 3: Enterprise & Graph Scale (High Priority)
+- [ ] **Neo4j Graph Database**: Replace NetworkX JSON storage with Neo4j to scale relationship indices, recursive path queries, and complex node graph operations.
+- [ ] **Unified Multi-Source Search**: Support scanning and cross-referencing information across multiple platforms (Gmail, Drive, Calendar, local uploads) at once.
+- [ ] **Upload Progress Bars**: Introduce real-time socket-based processing progress bars for document parsing and indexing.
 
 ## Phase 4: Production & Deployment (Low Priority)
-- [ ] **Dockerize Application**: Create Docker containers for easy deployment
-- [ ] **Deploy to Cloud**: Deploy backend (e.g., Vercel, AWS, GCP) and frontend (Vercel)
-- [ ] **Production Vector DB**: Replace ChromaDB with Pinecone or Qdrant in production
-- [ ] **Analytics Dashboard**: Add usage analytics and insights
-- [ ] **Mobile Responsive**: Make sure app works perfectly on mobile devices
+- [ ] **Dockerization**: Containerize backend and frontend services using Docker Compose for streamlined development/production parity.
+- [ ] **Cloud-native Vector DB**: Swap local ChromaDB with Pinecone or Qdrant in production setups.
+- [ ] **Analytics Dashboard**: Add custom usage tracking, response times, and RAG accuracy analytics.
 
 ---
 
