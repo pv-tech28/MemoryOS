@@ -13,3 +13,8 @@ requests
 itsdangerous
 networkx
 pydantic
+sqlalchemy>=2.0
+psycopg2-binary
+alembic
+supabase
+asyncpg
