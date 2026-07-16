@@ -5,10 +5,12 @@ Handles PDF upload, listing, and deletion.
 
 import os
 import uuid
-import json
 from datetime import datetime
 import traceback
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.repositories.document_repo import DocumentRepository
 from app.models.schemas import DocumentResponse, DocumentListResponse, UploadResponse
 from app.services.pdf_parser import parse_pdf
 from app.services.chunker import chunk_document_pages
@@ -23,7 +25,6 @@ load_dotenv()
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
-METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
 
 
 def _ensure_dirs():
@@ -31,24 +32,8 @@ def _ensure_dirs():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-def _load_metadata() -> dict:
-    """Load document metadata from disk."""
-    _ensure_dirs()
-    if os.path.exists(METADATA_FILE):
-        with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
-            return json.load(f)
-    return {}
-
-
-def _save_metadata(metadata: dict):
-    """Save document metadata to disk."""
-    _ensure_dirs()
-    with open(METADATA_FILE, "w") as f:
-        json.dump(metadata, f, indent=2)
-
-
 @router.post("/upload", response_model=UploadResponse)
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Upload a PDF file, parse it, generate embeddings, store in vector DB, and extract entities to knowledge graph.
     """
@@ -106,26 +91,48 @@ async def upload_document(file: UploadFile = File(...)):
         ]
         add_document(doc_id, chunk_texts, embeddings, metadatas)
 
-        # 5. Save metadata
-        all_metadata = _load_metadata()
-        all_metadata[doc_id] = {
-            "id": doc_id,
-            "filename": file.filename,
-            "file_path": file_path,
-            "page_count": parsed.page_count,
-            "chunk_count": len(chunks),
-            "file_size": len(content),
-            "status": "ready",
-            "uploaded_at": datetime.now().isoformat(),
-            "metadata": parsed.metadata,
-        }
-        _save_metadata(all_metadata)
+        # 5. Save metadata to DB
+        DocumentRepository.create(
+            db=db,
+            doc_id=doc_id,
+            filename=file.filename,
+            file_path=file_path,
+            source="upload",
+            page_count=parsed.page_count,
+            chunk_count=len(chunks),
+            file_size=len(content),
+            status="ready",
+            metadata=parsed.metadata,
+            user_id="default_user",
+        )
+        
+        # Save chunks to PostgreSQL document_chunks table
+        db_chunks = [
+            {
+                "chunk_index": c.chunk_index,
+                "page_number": c.page_number,
+                "content": c.text,
+            }
+            for c in chunks
+        ]
+        DocumentRepository.create_chunks(db, doc_id, db_chunks)
+
+        # Save an entry to Uploads table
+        DocumentRepository.create_upload(
+            db=db,
+            upload_id=doc_id,
+            filename=file.filename,
+            file_path=file_path,
+            file_size=len(content),
+            mime_type=file.content_type,
+            user_id="default_user",
+        )
         
         # 6. Add to knowledge graph with enhanced document node
         print(f"[Upload] Extracting entities and adding to knowledge graph...")
         graph_service = get_graph_service()
         
-        # Generate a short summary (first 200 chars of full text, for example)
+        # Generate a short summary (first 500 chars of full text)
         summary = full_text[:500].strip()
         if len(full_text) > 500:
             summary += "..."
@@ -178,45 +185,43 @@ async def upload_document(file: UploadFile = File(...)):
 
 
 @router.get("", response_model=DocumentListResponse)
-async def list_documents():
+async def list_documents(db: Session = Depends(get_db)):
     """List all uploaded documents."""
-    all_metadata = _load_metadata()
+    docs = DocumentRepository.list_all(db, user_id="default_user")
     documents = [
-        DocumentResponse(**doc_data)
-        for doc_data in all_metadata.values()
+        DocumentResponse(**DocumentRepository.to_dict(doc))
+        for doc in docs
     ]
-    # Sort by upload date, newest first
-    documents.sort(key=lambda d: d.uploaded_at, reverse=True)
     return DocumentListResponse(documents=documents, total=len(documents))
 
 
 @router.get("/{doc_id}", response_model=DocumentResponse)
-async def get_document(doc_id: str):
+async def get_document(doc_id: str, db: Session = Depends(get_db)):
     """Get details for a single document."""
-    all_metadata = _load_metadata()
-    if doc_id not in all_metadata:
+    doc = DocumentRepository.get(db, doc_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    return DocumentResponse(**all_metadata[doc_id])
+    return DocumentResponse(**DocumentRepository.to_dict(doc))
 
 
 @router.delete("/{doc_id}")
-async def delete_document(doc_id: str):
+async def delete_document(doc_id: str, db: Session = Depends(get_db)):
     """Delete a document and its embeddings."""
-    all_metadata = _load_metadata()
-    if doc_id not in all_metadata:
+    doc = DocumentRepository.get(db, doc_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    doc = all_metadata[doc_id]
-
     # Delete file from disk
-    if os.path.exists(doc.get("file_path", "")):
-        os.remove(doc["file_path"])
+    if doc.file_path and os.path.exists(doc.file_path):
+        try:
+            os.remove(doc.file_path)
+        except Exception as e:
+            print(f"Error removing file: {e}")
 
-    # Delete from ChromaDB
+    # Delete from FAISS vector store
     vs_delete(doc_id)
 
-    # Remove from metadata
-    del all_metadata[doc_id]
-    _save_metadata(all_metadata)
+    # Remove from database (cascades chunks)
+    DocumentRepository.delete(db, doc_id)
 
-    return {"message": f"Document '{doc['filename']}' deleted successfully."}
+    return {"message": f"Document '{doc.filename}' deleted successfully."}

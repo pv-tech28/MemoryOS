@@ -18,20 +18,22 @@ from app.services.memory_graph_builder import (
     RelationshipEdge
 )
 
+from app.database import SessionLocal
+from app.repositories.document_repo import DocumentRepository
+
 load_dotenv()
 
 router = APIRouter(prefix="/api/memory-graph", tags=["memory-graph"])
 
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
-METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
-
 
 def _load_metadata() -> dict:
-    """Load document metadata from disk."""
-    if os.path.exists(METADATA_FILE):
-        with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
-            return json.load(f)
-    return {}
+    """Load document metadata from PostgreSQL."""
+    db = SessionLocal()
+    try:
+        return DocumentRepository.to_metadata_dict(db, user_id="default_user")
+    finally:
+        db.close()
+
 
 
 # Node type colors
@@ -205,17 +207,9 @@ async def get_entity(node_id: str):
         # Get related entities
         related_nodes = graph_service.find_related_nodes(node_id)
         
-        # Get connected documents/emails/calendar events from metadata
-        import os
-        import json
-        UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
-        METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
-        all_metadata = {}
-        try:
-            with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
-                all_metadata = json.load(f)
-        except:
-            pass
+        # Get connected documents/emails/calendar events from database
+        all_metadata = _load_metadata()
+
         
         connected_documents = []
         connected_emails = []

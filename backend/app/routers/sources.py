@@ -21,31 +21,12 @@ from ..services.memory_graph_builder import (
     get_graph_service,
     EntityNode
 )
+from app.database import SessionLocal
+from app.repositories.document_repo import DocumentRepository
 
 load_dotenv()
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
-
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
-METADATA_FILE = os.path.join(UPLOAD_DIR, "_metadata.json")
-
-
-def _ensure_dirs():
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-def load_metadata() -> dict:
-    _ensure_dirs()
-    if os.path.exists(METADATA_FILE):
-        with open(METADATA_FILE, "r", encoding="utf-8-sig") as f:
-            return json.load(f)
-    return {}
-
-
-def save_metadata(metadata: dict) -> None:
-    _ensure_dirs()
-    with open(METADATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
 
 
 def get_google_credentials() -> Credentials:
@@ -57,7 +38,8 @@ def get_google_credentials() -> Credentials:
     if creds.get("expiry"):
         from datetime import datetime
         expiry = datetime.fromisoformat(creds["expiry"])
-    return Credentials(
+    
+    google_creds = Credentials(
         token=creds["token"],
         refresh_token=creds.get("refresh_token"),
         token_uri=creds["token_uri"],
@@ -66,6 +48,58 @@ def get_google_credentials() -> Credentials:
         scopes=creds["scopes"],
         expiry=expiry,
     )
+
+    # Automatically check/refresh if expired or about to expire
+    from datetime import datetime, UTC
+    now_dt = datetime.now(UTC).replace(tzinfo=None)
+    expiry_past = expiry is not None and expiry.replace(tzinfo=None) < now_dt
+
+    if google_creds.expired or expiry_past:
+        from google.auth.transport.requests import Request as AuthRequest
+        import google.auth.exceptions
+        from app.repositories.auth_repo import AuthRepository
+        try:
+            print("[OAuth] Token expired, attempting refresh...")
+            google_creds.refresh(AuthRequest())
+            # Save refreshed credentials back to database
+            db = SessionLocal()
+            try:
+                AuthRepository.save_credentials(
+                    db=db,
+                    user_id=user_id,
+                    token=google_creds.token,
+                    refresh_token=google_creds.refresh_token,
+                    token_uri=google_creds.token_uri,
+                    client_id=google_creds.client_id,
+                    client_secret=google_creds.client_secret,
+                    scopes=google_creds.scopes,
+                    expiry=google_creds.expiry,
+                )
+                db.commit()
+                print("[OAuth] Token refreshed and saved successfully.")
+            except Exception as e:
+                db.rollback()
+                print(f"[OAuth] Error saving refreshed credentials: {e}")
+            finally:
+                db.close()
+        except google.auth.exceptions.RefreshError as e:
+            # Token is revoked or expired and cannot be refreshed!
+            print(f"[OAuth] Refresh failed, deleting expired credentials: {e}")
+            db = SessionLocal()
+            try:
+                AuthRepository.delete_credentials(db, user_id)
+                db.commit()
+            except Exception as e2:
+                db.rollback()
+                print(f"[OAuth] Error deleting invalid credentials: {e2}")
+            finally:
+                db.close()
+            raise HTTPException(
+                status_code=401,
+                detail="Google authentication has expired or was revoked. Please click 'Connect' to log in again."
+            )
+            
+    return google_creds
 
 
 @router.post("/gmail/sync")
@@ -123,20 +157,36 @@ async def sync_gmail():
             ]
             add_document(doc_id, chunk_texts, embeddings, metadatas)
             
-            # Update metadata
-            metadata = load_metadata()
-            metadata[doc_id] = {
-                "id": doc_id,
-                "filename": f"Email - {subject}",
-                "source": "gmail",
-                "uploaded_at": datetime.now().isoformat(),
-                "page_count": 1,
-                "chunk_count": len(chunks),
-                "file_size": len(content.encode("utf-8")),
-                "status": "ready",
-                "metadata": {}
-            }
-            save_metadata(metadata)
+            # Update metadata in PostgreSQL
+            db = SessionLocal()
+            try:
+                DocumentRepository.create(
+                    db=db,
+                    doc_id=doc_id,
+                    filename=f"Email - {subject}",
+                    source="gmail",
+                    page_count=1,
+                    chunk_count=len(chunks),
+                    file_size=len(content.encode("utf-8")),
+                    status="ready",
+                    metadata={},
+                    user_id="default_user",
+                )
+                db_chunks = [
+                    {
+                        "chunk_index": c.chunk_index,
+                        "page_number": c.page_number or 1,
+                        "content": c.text,
+                    }
+                    for c in chunks
+                ]
+                DocumentRepository.create_chunks(db, doc_id, db_chunks)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                print(f"Error saving gmail doc metadata to DB: {e}")
+            finally:
+                db.close()
             
             # Add to knowledge graph with enhanced email node
             recipients = next((h["value"] for h in headers if h["name"] == "To"), "")
@@ -204,20 +254,36 @@ async def sync_drive():
                 ]
                 add_document(doc_id, chunk_texts, embeddings, metadatas)
                 
-                # Update metadata
-                metadata = load_metadata()
-                metadata[doc_id] = {
-                    "id": doc_id,
-                    "filename": file["name"],
-                    "source": "drive",
-                    "uploaded_at": datetime.now().isoformat(),
-                    "page_count": 1,
-                    "chunk_count": len(chunks),
-                    "file_size": int(file.get("size", len(file_content))),
-                    "status": "ready",
-                    "metadata": {}
-                }
-                save_metadata(metadata)
+                # Update metadata in PostgreSQL
+                db = SessionLocal()
+                try:
+                    DocumentRepository.create(
+                        db=db,
+                        doc_id=doc_id,
+                        filename=file["name"],
+                        source="drive",
+                        page_count=1,
+                        chunk_count=len(chunks),
+                        file_size=int(file.get("size", len(file_content))),
+                        status="ready",
+                        metadata={},
+                        user_id="default_user",
+                    )
+                    db_chunks = [
+                        {
+                            "chunk_index": c.chunk_index,
+                            "page_number": c.page_number or 1,
+                            "content": c.text,
+                        }
+                        for c in chunks
+                    ]
+                    DocumentRepository.create_chunks(db, doc_id, db_chunks)
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    print(f"Error saving drive doc metadata to DB: {e}")
+                finally:
+                    db.close()
                 
                 # Add to knowledge graph with enhanced drive document node
                 doc_node = EntityNode(
@@ -282,20 +348,36 @@ async def sync_calendar():
             ]
             add_document(doc_id, chunk_texts, embeddings, metadatas)
             
-            # Update metadata
-            metadata = load_metadata()
-            metadata[doc_id] = {
-                "id": doc_id,
-                "filename": f"Event - {summary}",
-                "source": "calendar",
-                "uploaded_at": datetime.now().isoformat(),
-                "page_count": 1,
-                "chunk_count": len(chunks),
-                "file_size": len(content.encode("utf-8")),
-                "status": "ready",
-                "metadata": {}
-            }
-            save_metadata(metadata)
+            # Update metadata in PostgreSQL
+            db = SessionLocal()
+            try:
+                DocumentRepository.create(
+                    db=db,
+                    doc_id=doc_id,
+                    filename=f"Event - {summary}",
+                    source="calendar",
+                    page_count=1,
+                    chunk_count=len(chunks),
+                    file_size=len(content.encode("utf-8")),
+                    status="ready",
+                    metadata={},
+                    user_id="default_user",
+                )
+                db_chunks = [
+                    {
+                        "chunk_index": c.chunk_index,
+                        "page_number": c.page_number or 1,
+                        "content": c.text,
+                    }
+                    for c in chunks
+                ]
+                DocumentRepository.create_chunks(db, doc_id, db_chunks)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                print(f"Error saving calendar doc metadata to DB: {e}")
+            finally:
+                db.close()
             
             # Add to knowledge graph with enhanced calendar event node
             location = event.get("location", "")

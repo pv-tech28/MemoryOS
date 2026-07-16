@@ -8,6 +8,8 @@ from fastapi import APIRouter
 from app.services.memory_store import get_all_memories
 from app.services.timeline_service import get_timeline_events
 from app.services.memory_graph_builder import get_graph_service
+from app.database import SessionLocal
+from app.repositories.document_repo import DocumentRepository
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -84,15 +86,16 @@ async def get_dashboard_stats():
     """
     Get all dashboard stats for Home page
     """
-    # Load metadata for documents, emails, calendar
-    upload_dir = os.getenv("UPLOAD_DIR", "./uploads")
-    metadata_path = os.path.join(upload_dir, "_metadata.json")
+    # Load metadata for documents, emails, calendar from PostgreSQL
+    db = SessionLocal()
     all_metadata = []
     try:
-        with open(metadata_path, "r", encoding="utf-8") as f:
-            all_metadata = list(json.load(f).values())
+        docs = DocumentRepository.list_all(db, user_id="default_user")
+        all_metadata = [DocumentRepository.to_dict(d) for d in docs]
     except Exception as e:
-        print(f"Error loading metadata: {e}")
+        print(f"Error loading metadata from DB: {e}")
+    finally:
+        db.close()
 
     # Count documents, emails, calendar
     total_documents = 0
