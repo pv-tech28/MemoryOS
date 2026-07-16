@@ -8,14 +8,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+from app.database import init_database
 from app.routers import documents, chat, memory_graph, auth, sources, memories, timeline, dashboard
 
 load_dotenv()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_database()
+    yield
 
 app = FastAPI(
     title="EVOLVE AI API",
     description="AI-powered Digital Memory Operating System — Backend API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Session Middleware for OAuth state/code_verifier persistence

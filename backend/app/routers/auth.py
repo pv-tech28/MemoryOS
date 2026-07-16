@@ -27,25 +27,35 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
 
-# Credentials storage file path
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-CREDENTIALS_FILE = Path(UPLOAD_DIR) / "google_credentials.json"
+from app.database import SessionLocal
+from app.repositories.auth_repo import AuthRepository
 
-def load_user_credentials():
-    """Load credentials from file."""
-    if CREDENTIALS_FILE.exists():
-        with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+class DatabaseUserCredentialsDict(dict):
+    def __contains__(self, key):
+        db = SessionLocal()
+        try:
+            return AuthRepository.has_credentials(db, key)
+        finally:
+            db.close()
 
-def save_user_credentials(credentials):
-    """Save credentials to file."""
-    with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
-        json.dump(credentials, f, indent=2)
+    def __getitem__(self, key):
+        db = SessionLocal()
+        try:
+            creds = AuthRepository.get_credentials(db, key)
+            if creds is None:
+                raise KeyError(key)
+            return creds
+        finally:
+            db.close()
 
-# Load credentials on startup
-user_credentials = load_user_credentials()
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+# Expose user_credentials for backward compatibility with sources.py
+user_credentials = DatabaseUserCredentialsDict()
 
 def get_flow() -> Flow:
     """Create OAuth2 flow instance."""
@@ -110,19 +120,27 @@ async def google_callback(request: Request):
         
         # For now, use a default user ID
         user_id = "default_user"
-        creds_dict = {
-            "token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_uri": credentials.token_uri,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
-            "scopes": credentials.scopes,
-            "expiry": credentials.expiry.isoformat() if credentials.expiry else None,
-        }
-        user_credentials[user_id] = creds_dict
         
-        # Save credentials to file
-        save_user_credentials(user_credentials)
+        # Save credentials to database via AuthRepository
+        db = SessionLocal()
+        try:
+            AuthRepository.save_credentials(
+                db=db,
+                user_id=user_id,
+                token=credentials.token,
+                refresh_token=credentials.refresh_token,
+                token_uri=credentials.token_uri,
+                client_id=credentials.client_id,
+                client_secret=credentials.client_secret,
+                scopes=credentials.scopes,
+                expiry=credentials.expiry,
+            )
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Database save failed: {str(e)}")
+        finally:
+            db.close()
         
         # Redirect back to frontend sources page
         return RedirectResponse(url="http://localhost:3000/sources")
@@ -135,4 +153,9 @@ async def google_callback(request: Request):
 async def auth_status():
     """Check if user is authenticated with Google."""
     user_id = "default_user"
-    return {"authenticated": user_id in user_credentials}
+    db = SessionLocal()
+    try:
+        authenticated = AuthRepository.has_credentials(db, user_id)
+        return {"authenticated": authenticated}
+    finally:
+        db.close()
