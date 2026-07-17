@@ -1,241 +1,226 @@
-# 🧠 EVOLVE AI - Digital Memory Vault 
+# EVOLVE AI - Digital Memory OS
 
-> **"Your Second Brain That Never Forgets."** 
+> Your second brain that remembers conversations, files, emails, events, and relationships across your digital life.
 
---- 
+## Project Status
 
-# 📋 Current Status (What We've Done & How)
+EVOLVE AI is now a working full-stack Memory OS with a FastAPI backend, a Next.js frontend, Supabase-backed relational storage, local semantic retrieval, Google source syncing, and an interactive knowledge graph UI.
 
-We've built out the core of MemoryOS (EVOLVE AI)! Below is a comprehensive list of what has been implemented, how it works, and what is remaining.
+This README reflects the current implementation state of the repository: what is already done, how the system works, and what remains before production readiness.
 
----
+## What Is Done
 
-# 🏗️ Architectural Overview & Core Implementations
+### Core product flows
 
-## 1. 🧠 Memory Intelligence Layer & RAG Pipeline
-- **Orchestration Layer (`backend/app/services/memory_intelligence.py`)**: Intercepts requests between the user and the LLM. It aggregates data from three distinct sources (ChromaDB Vector Store, SQLite Long-Term Memory, and the NetworkX Knowledge Graph) to compile a rich, personalized prompt context.
-- **RAG Engine (`backend/app/services/rag_engine.py`)**: 
-  - Retrieves contextual semantic text chunks from the vector database.
-  - Automatically queries Google Gemini (or OpenRouter as a fallback) with the customized intelligence prompt.
-  - Parses confidence scores (`[CONFIDENCE: X.X]`) out of the model's text response and binds citations to the UI.
-- **Unified Chat Router (`backend/app/routers/chat.py`)**: Manages chat sessions, saves conversation history using SQLite-backed structures, and triggers background memory extraction.
+- Ask page is implemented for chat-based retrieval and answer generation.
+- Files flow supports uploads and document ingestion.
+- Memory Graph page renders an interactive graph with search, filters, minimap, force layout, and related-memory exploration.
+- Timeline page shows chronological activity and memory-related events.
+- Sources page supports Google integrations plus uploaded content.
+- Settings pages exist for profile, notifications, storage, language, email, password/security, and related account preferences.
 
-## 2. 🗄️ SQLite Long-Term Memory Vault
-- **Memory Store (`backend/app/services/memory_store.py`)**: Persists structured user facts into an SQLite database (`memory_db.sqlite`).
-- **Category Classification**: Classifies memories into categories: `personal`, `goal`, `project`, `preference`, `skill`, `deadline`, `task`, `education`, `career`, or `custom`.
-- **Decay & Importance Scoring**: Tracks memory metrics like `importance` (0.0 to 1.0), `access_count`, and `last_accessed` timestamp. Importance gets updated and boosted dynamically when repeated topics are discussed.
-- **Memory Extraction (`backend/app/services/memory_extractor.py`)**: Uses LLM prompts to analyze chat histories, auto-extract important facts, filter casual small talk, and save them as memories in the SQLite DB and update the NetworkX graph.
+### Backend architecture
 
-## 3. 🌐 Semantic Knowledge Graph (NetworkX)
-- **Graph Builder (`backend/app/services/memory_graph_builder.py`)**: Manages a directed graph of entity nodes (types like `Person`, `Project`, `Technology`, `Skill`, `Email`, `Document`, `Event`, `Concept`) and semantic relationships (`works_at`, `mentions`, `belongs_to`, `attends`, `related_to`, etc.) in `knowledge_graph.json`.
-- **Dynamic Entity Extraction**: Automatically extracts entities and relationships from newly uploaded files and conversations using the Gemini API.
-- **Advanced Graph UI (`frontend/src/app/memory-graph/page.tsx`)**:
-  - Employs a stunning, interactive force-directed graph visualizer using dynamic drag-and-drop.
-  - Renders node sizes based on their dynamic importance and edge line thickness based on their relationship strength.
-  - Provides a visual filter system and an interactive side-drawer component showing details, connections, and related memories for any selected node.
+- FastAPI application is wired through modular routers for chat, documents, memory graph, auth, sources, memories, timeline, dashboard, and settings.
+- SQLAlchemy models and repositories are used for structured persistence instead of keeping everything in flat local files.
+- Supabase PostgreSQL is the primary database target, with SQLite fallback for local development when `DATABASE_URL` is not provided.
+- Database initialization runs automatically on backend startup.
 
-## 4. 🔌 External Integrations Sync & Google OAuth2
-- **OAuth2 Authenticator (`backend/app/routers/auth.py`)**: Handles full authentication callbacks for Google services, saving offline credentials locally at `google_credentials.json`.
-- **Third-Party Syncing (`backend/app/routers/sources.py`)**:
-  - **Gmail Sync**: Pulls recent emails, parses subject/body details, embeds content, and writes nodes and relationship paths into the knowledge graph.
-  - **Google Drive Sync**: Ingests files, parses PDFs via PyMuPDF (`pdf_parser.py`), chunks content (`chunker.py`), and embeds/stores them in the vector store.
-  - **Google Calendar Sync**: Imports scheduled meetings/events, indexes description/metadata, and connects event entities.
-- **Sources Control Panel (`frontend/src/app/sources/page.tsx`)**: Fully interactive page supporting manual drag-and-drop PDF uploads and individual triggers to sync Gmail, Google Drive, and Google Calendar.
+### Memory and retrieval system
 
-## 5. 📅 Interactive Timeline Track
-- **Timeline Engine (`backend/app/services/timeline_service.py`)**: Writes system events (e.g. chats, file uploads, memory creation, Gmail/Drive syncs) to a JSON events store (`timeline_events.json`).
-- **Timeline Page (`frontend/src/app/timeline/page.tsx`)**: Renders a beautiful visual timeline, grouping events chronologically by day, applying type-specific color codes, and supporting timeline item deletion.
+- Document chunks are embedded and used for retrieval-augmented generation.
+- Chat history and extracted memories are persisted.
+- Memory extraction can be toggled with environment configuration.
+- Knowledge graph entities and edges are built from uploaded content and synced source data.
+- Related memories and graph context are exposed back to the UI.
 
----
+### Graph system
 
-# 🛠️ Tech Stack We're Using
+- The graph backend exposes nodes, edges, entity search, entity detail, and subgraph endpoints.
+- The graph frontend uses React Flow with a force-directed layout and rich node rendering.
+- Documents, emails, events, technologies, people, skills, projects, and custom entities are represented visually.
+- Graph stats and related-node exploration are supported in the frontend.
 
-| Category | Technology | Description |
-|----------|------------|-------------|
-| **Backend Framework** | FastAPI | High-performance Python API framework |
-| **Backend Database** | SQLite | Serverless SQL DB for memories & chats |
-| **Vector Database** | ChromaDB | Local vector store for document embeddings |
-| **Graph Abstraction** | NetworkX | Local graph library, persisted as JSON |
-| **LLM Provider** | Google Gemini / OpenRouter | API endpoints for memory and answer generation |
-| **Embeddings** | sentence-transformers | `all-MiniLM-L6-v2` for generating dense embeddings locally |
-| **PDF Extraction** | PyMuPDF (fitz) | High-speed PDF text ingestion |
-| **Frontend Framework**| Next.js 15+ | App router layout, React, TypeScript |
-| **Styling** | Tailwind CSS | Utility-first styling with custom dark-mode vars |
-| **Animations** | Framer Motion | Smooth component transitions and visual effects |
-| **Git Remote** | https://github.com/pv-tech28/MemoryOS.git | Primary repo |
+### Source integrations
 
----
+- Google OAuth flow is implemented for Gmail, Drive, and Calendar.
+- Synced content is normalized and inserted into the same memory system as uploaded files.
+- Uploaded documents are also represented in the graph and linked back to the central user node.
 
-# 🚀 How to Run the Application
+### Stability fixes already completed
 
-## Prerequisites
-1. Python 3.12 installed
-2. Node.js 18+ installed
-3. Gemini API key (get from https://aistudio.google.com/apikey)
+- Repository user IDs were standardized to `default_user` to fix source-sync/session consistency issues.
+- Heavy optional dependencies in the documents router were made lazy/optional so the backend can start even if OCR or Whisper-related packages are missing.
+- Supabase environment handling was stabilized for the current setup.
+- The project has been run locally and the major pages were verified to load.
 
-## Step 1: Set Up Backend
+## How It Works
+
+### 1. Frontend
+
+The frontend is a Next.js app that provides the user interface for:
+
+- chat and memory retrieval,
+- uploads and source sync control,
+- graph visualization,
+- timeline browsing,
+- settings and profile management.
+
+### 2. API layer
+
+The backend is a FastAPI app that exposes REST endpoints for each product area:
+
+- chat,
+- documents,
+- memory graph,
+- auth,
+- sources,
+- timeline,
+- dashboard,
+- settings.
+
+### 3. Storage model
+
+The system currently uses:
+
+- Supabase PostgreSQL as the primary relational database,
+- SQLite fallback for local-only development,
+- local vector storage for retrieval,
+- graph entities and relationships managed through the graph service layer.
+
+### 4. Ingestion pipeline
+
+When a file is uploaded or a source is synced:
+
+1. content is parsed,
+2. text is chunked,
+3. chunks are embedded,
+4. metadata is stored,
+5. graph entities and relationships are created,
+6. timeline events and related records are updated.
+
+### 5. Retrieval flow
+
+When the user asks a question:
+
+1. relevant content is retrieved from stored memory/document context,
+2. graph and memory context are assembled,
+3. the LLM generates a grounded response,
+4. the UI displays structured output and supporting source context.
+
+## Current Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js, React, TypeScript |
+| UI | Tailwind CSS, Framer Motion, React Flow |
+| Backend | FastAPI, SQLAlchemy |
+| Database | Supabase PostgreSQL, SQLite fallback |
+| Retrieval | Local embeddings and vector retrieval |
+| AI providers | OpenRouter, Gemini-compatible flows |
+| Integrations | Gmail, Google Drive, Google Calendar |
+
+## Run Locally
+
+### Prerequisites
+
+- Python 3.11+ or 3.12
+- Node.js 18+
+- npm
+- A configured `backend/.env`
+
+### Backend
+
 ```bash
-# Navigate to backend directory
 cd backend
-
-# Create virtual environment (if not already created)
 python -m venv .venv
-
-# Activate virtual environment (Windows)
 .venv\Scripts\activate
-
-# Install dependencies (if not already installed)
 pip install -r requirements.txt
-
-# Configure .env file with your Gemini API key and settings
-# Make sure backend/.env has at least:
-# GEMINI_API_KEY=your_gemini_api_key_here
-# MEMORY_EXTRACTION_ENABLED=true
-
-# Run the FastAPI backend server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-Backend will be running at: http://localhost:8000
 
-## Step 2: Set Up Frontend
+Backend URL:
+
+- `http://localhost:8000`
+- docs: `http://localhost:8000/docs`
+- health: `http://localhost:8000/api/health`
+
+### Frontend
+
 ```bash
-# Open a new terminal, navigate to frontend directory
 cd frontend
-
-# Install dependencies
 npm install
-
-# Run Next.js dev server
 npm run dev
 ```
-Frontend will be running at: http://localhost:3000
 
-## Step 3: Set Up Google Integrations (Gmail, Drive, Calendar)
+Frontend URL:
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project.
-2. Enable the **Gmail API**, **Google Drive API**, and **Google Calendar API**.
-3. Create OAuth 2.0 Client Credentials with redirect URI:
-   - `http://localhost:8000/api/auth/google/callback`
-4. Add the generated keys into your `backend/.env` file:
-   ```env
-   GOOGLE_CLIENT_ID=your_client_id_here
-   GOOGLE_CLIENT_SECRET=your_client_secret_here
-   GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
-   ```
-5. Navigate to `http://localhost:3000/sources` on the frontend, click **Sync** on any Google integration to perform authentication.
+- `http://localhost:3000`
 
----
+If port 3000 is already occupied, Next.js may automatically move to `3001` or another free port.
 
-# 📌 Remaining Tasks (What's Next)
+### Required environment variables
 
-Here's everything still left to implement to complete EVOLVE AI:
+At minimum, configure these in `backend/.env`:
 
-## Phase 1: Core Enhancements (High Priority)
-- [ ] **Multi-User Authentication**: Proper signup/login security flow (JWT session-based) for frontend users.
-- [ ] **PostgreSQL Database Integration**: Migrate from SQLite and `_metadata.json` to PostgreSQL to handle relational user records, document lists, and chat logs robustly.
-- [ ] **Live Daily Summary Page**: Replace frontend static summary mocks (`daily-summary/page.tsx`) with an LLM-driven backend API that constructs structured daily highlights, activity stats, and AI memory insights from user actions.
+```env
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=your_key_here
+OPENROUTER_MODEL=deepseek/deepseek-chat-v3-0324
+SESSION_SECRET_KEY=your_session_secret
+DATABASE_URL=your_supabase_transaction_pooler_url
+DIRECT_URL=your_supabase_direct_session_url
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+```
 
-## Phase 2: Source Integrations (Medium Priority)
-- [ ] **GitHub Integration**: Connect to GitHub OAuth to index repository structures, commits, and pull requests.
-- [ ] **WhatsApp Ingestion**: Support parsing of exported WhatsApp chat backup files to extract structured personal memories.
-- [ ] **Image Uploads + OCR**: Integrate Tesseract OCR or Gemini Vision API to parse uploaded images.
-- [ ] **Audio Uploads + Speech-to-Text**: Implement audio file transcription using Whisper API to ingest voice notes.
+## What Remains
 
-## Phase 3: Enterprise & Graph Scale (High Priority)
-- [ ] **Neo4j Graph Database**: Replace NetworkX JSON storage with Neo4j to scale relationship indices, recursive path queries, and complex node graph operations.
-- [ ] **Unified Multi-Source Search**: Support scanning and cross-referencing information across multiple platforms (Gmail, Drive, Calendar, local uploads) at once.
-- [ ] **Upload Progress Bars**: Introduce real-time socket-based processing progress bars for document parsing and indexing.
+### High priority
 
-## Phase 4: Production & Deployment (Low Priority)
-- [ ] **Dockerization**: Containerize backend and frontend services using Docker Compose for streamlined development/production parity.
-- [ ] **Cloud-native Vector DB**: Swap local ChromaDB with Pinecone or Qdrant in production setups.
-- [ ] **Analytics Dashboard**: Add custom usage tracking, response times, and RAG accuracy analytics.
+- Multi-user authentication and proper per-user session isolation.
+- Replace hardcoded `default_user` behavior with real account-scoped data ownership.
+- Implement a real backend-powered daily summary flow instead of static/mock behavior.
+- Add stronger automated test coverage for core backend flows and source-sync regressions.
+- Harden error handling and retries around third-party sync operations.
 
----
+### Product expansion
 
-# 🚀 Vision (Original)
+- GitHub integration.
+- WhatsApp/chat export ingestion.
+- Better OCR and speech-to-text workflows for images and audio.
+- Unified cross-source search across all connected platforms.
+- Background job tracking and visible processing progress in the UI.
 
-EVOLVE AI is an AI-powered Digital Memory Operating System that connects scattered information across multiple platforms into one intelligent memory. 
+### Scale and production readiness
 
-Instead of manually searching through emails, chats, PDFs, notes, GitHub repositories, calendars, photos, and recordings, users simply ask questions in natural language. 
+- Production auth and authorization model.
+- Background workers/queues for long-running ingestion.
+- Dockerized local and production deployment setup.
+- CI/CD and deployment automation.
+- Usage analytics, observability, and performance monitoring.
+- Optional move to a dedicated graph database if graph scale exceeds the current service design.
 
-EVOLVE AI understands context, relationships, and timelines—not just keywords. 
+## Suggested Next Build Order
 
-Think of it as your personal AI memory. 
+1. Implement real auth and remove the single hardcoded user assumption.
+2. Ship the daily summary backend flow.
+3. Add background job/progress infrastructure for uploads and source sync.
+4. Add targeted backend and integration tests.
+5. Containerize and prepare deployment.
 
---- 
+## Product Vision
 
-# ❌ The Problem (Original)
+EVOLVE AI is meant to unify scattered personal and project context into one searchable, explainable memory system.
 
-Today's information is fragmented. 
+Instead of searching across separate apps, users ask natural-language questions and get answers grounded in:
 
-Your digital life lives across dozens of applications. 
+- chats,
+- uploaded files,
+- emails,
+- calendar events,
+- graph relationships,
+- and stored memories.
 
-- Gmail 
-- Google Drive 
-- Google Calendar 
-- WhatsApp 
-- GitHub 
-- Notion 
-- OneNote 
-- PDFs 
-- Photos 
-- Voice Recordings 
-- Local Files 
-
-The information isn't lost. 
-
-It's disconnected. 
-
----
-
-# 🎯 Goals (Original)
-
-- Build an AI-powered Memory Operating System 
-- Connect multiple digital platforms 
-- Enable semantic search 
-- Build relationships between data 
-- Generate trustworthy answers 
-- Provide complete references with every response 
-
----
-
-# 💡 Example Questions (Original)
-
-> When did we first discuss SilentGuard? 
-
-> Who suggested adding AI to our project? 
-
-> Show every document related to Hackathon. 
-
-> Find all emails from Google regarding internships. 
-
-> What tasks are still pending for EVOLVE AI? 
-
-> Show the timeline of this startup. 
-
-> What changed after our last meeting? 
-
----
-
-# 🎯 Target Users (Original)
-
-- Students 
-- Researchers 
-- Startup Founders 
-- Developers 
-- Teams 
-- Professionals 
-- Content Creators 
-
----
-
-# ❤️ Why EVOLVE AI?
-
-Search engines find files. 
-
-EVOLVE AI remembers your life. 
-
-It connects memories, understands context, builds relationships, and helps you retrieve information exactly when you need it. 
-
-**Your Second Brain That Never Forgets.**
+The long-term goal is not just search. It is memory with context, structure, and recall.
