@@ -1,6 +1,6 @@
 """
 Documents Router
-Handles PDF upload, listing, and deletion.
+Handles PDF, DOCX, TXT, image (OCR), and audio (Whisper) upload, listing, and deletion.
 """
 
 import os
@@ -20,28 +20,76 @@ from app.services.memory_graph_builder import get_graph_service, EntityNode
 from app.services.timeline_service import add_timeline_event
 from dotenv import load_dotenv
 
+# New imports for additional file types
+import docx
+from PIL import Image
+import pytesseract
+import whisper
+
 load_dotenv()
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
 
+# Initialize Whisper model (load once)
+_whisper_model = None
+
+def get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        print("[Whisper] Loading Whisper model (base)...")
+        _whisper_model = whisper.load_model("base")
+    return _whisper_model
 
 def _ensure_dirs():
     """Ensure upload directory exists."""
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+def parse_txt(file_path: str) -> tuple[str, dict]:
+    """Parse plain text file."""
+    with open(file_path, "r", encoding="utf-8") as f:
+        text = f.read()
+    return text, {}
+
+def parse_docx(file_path: str) -> tuple[str, dict]:
+    """Parse DOCX file."""
+    doc = docx.Document(file_path)
+    full_text = []
+    for para in doc.paragraphs:
+        full_text.append(para.text)
+    text = "\n".join(full_text)
+    return text, {}
+
+def parse_image(file_path: str) -> tuple[str, dict]:
+    """Parse image using OCR (pytesseract)."""
+    img = Image.open(file_path)
+    text = pytesseract.image_to_string(img)
+    return text, {}
+
+def parse_audio(file_path: str) -> tuple[str, dict]:
+    """Parse audio using Whisper speech to text."""
+    model = get_whisper_model()
+    result = model.transcribe(file_path)
+    return result["text"], {"language": result.get("language")}
+
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Upload a PDF file, parse it, generate embeddings, store in vector DB, and extract entities to knowledge graph.
+    Upload a PDF, DOCX, TXT, image (JPG/JPEG/PNG/WEBP), or audio (MP3/WAV/M4A) file,
+    parse it, generate embeddings, store in vector DB, and extract entities to knowledge graph.
     """
     # Validate file type
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+    filename_lower = file.filename.lower()
+    
+    supported_extensions = (".pdf", ".docx", ".txt", ".jpg", ".jpeg", ".png", ".webp", ".mp3", ".wav", ".m4a")
+    if not filename_lower.endswith(supported_extensions):
         raise HTTPException(
             status_code=400,
-            detail="Only PDF files are supported. Please upload a .pdf file."
+            detail="Unsupported file type. Please upload PDF, DOCX, TXT, image (JPG/JPEG/PNG/WEBP), or audio (MP3/WAV/M4A)."
         )
 
     _ensure_dirs()
@@ -56,30 +104,44 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
         f.write(content)
 
     try:
-        # 1. Parse PDF
-        print(f"[Upload] Parsing PDF: {file.filename}")
-        parsed = parse_pdf(file_path)
+        page_count = 1
+        metadata = {}
         
-        # Collect all text for entity extraction
-        full_text = "\n".join([p.text for p in parsed.pages if p.text.strip()])
+        # Parse the file based on type
+        print(f"[Upload] Parsing {file.filename}")
+        if filename_lower.endswith(".pdf"):
+            parsed = parse_pdf(file_path)
+            full_text = "\n".join([p.text for p in parsed.pages if p.text.strip()])
+            page_count = parsed.page_count
+            metadata = parsed.metadata
+        elif filename_lower.endswith(".docx"):
+            full_text, metadata = parse_docx(file_path)
+        elif filename_lower.endswith(".txt"):
+            full_text, metadata = parse_txt(file_path)
+        elif filename_lower.endswith((".jpg", ".jpeg", ".png", ".webp")):
+            full_text, metadata = parse_image(file_path)
+        elif filename_lower.endswith((".mp3", ".wav", ".m4a")):
+            full_text, metadata = parse_audio(file_path)
+        else:
+            raise ValueError("Unsupported file type")
 
-        # 2. Chunk the document
-        print(f"[Upload] Chunking {parsed.page_count} pages...")
-        pages_data = [
-            {"page_number": p.page_number, "text": p.text}
-            for p in parsed.pages
-        ]
+        if not full_text.strip():
+            raise ValueError("No text content could be extracted from the file.")
+
+        # Chunk the document
+        print(f"[Upload] Chunking document...")
+        pages_data = [{"page_number": 1, "text": full_text}]
         chunks = chunk_document_pages(pages_data)
         chunk_texts = [c.text for c in chunks]
 
         if not chunk_texts:
-            raise ValueError("No text chunks could be extracted from the PDF.")
+            raise ValueError("No text chunks could be extracted from the file.")
 
-        # 3. Generate embeddings
+        # Generate embeddings
         print(f"[Upload] Generating embeddings for {len(chunk_texts)} chunks...")
         embeddings = embed_texts(chunk_texts)
 
-        # 4. Store in vector DB
+        # Store in vector DB
         print(f"[Upload] Storing in vector DB...")
         metadatas = [
             {
@@ -91,18 +153,18 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
         ]
         add_document(doc_id, chunk_texts, embeddings, metadatas)
 
-        # 5. Save metadata to DB
+        # Save metadata to DB
         DocumentRepository.create(
             db=db,
             doc_id=doc_id,
             filename=file.filename,
             file_path=file_path,
             source="upload",
-            page_count=parsed.page_count,
+            page_count=page_count,
             chunk_count=len(chunks),
             file_size=len(content),
             status="ready",
-            metadata=parsed.metadata,
+            metadata=metadata,
             user_id="default_user",
         )
         
@@ -128,7 +190,7 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
             user_id="default_user",
         )
         
-        # 6. Add to knowledge graph with enhanced document node
+        # Add to knowledge graph with enhanced document node
         print(f"[Upload] Extracting entities and adding to knowledge graph...")
         graph_service = get_graph_service()
         
@@ -143,36 +205,46 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
             description=summary,
             metadata={
                 "uploaded_at": datetime.now().isoformat(),
-                "page_count": parsed.page_count,
+                "page_count": page_count,
                 "chunk_count": len(chunks),
                 "doc_id": doc_id,
-                "title": parsed.metadata.get("title", ""),
-                "author": parsed.metadata.get("author", ""),
+                "title": metadata.get("title", ""),
+                "author": metadata.get("author", ""),
                 "file_size": len(content)
-            }
+            },
+            source_doc_ids=[doc_id]
         )
         graph_service.process_text(
             text=full_text,
             source_node=doc_node,
-            context={"type": "document", "source": "upload"}
+            context={"type": "document", "source": "upload"},
+            doc_id=doc_id
         )
 
+        # Determine event type for timeline
+        event_type = "file_upload"
+        if filename_lower.endswith(".pdf"):
+            event_type = "pdf_upload"
+        elif filename_lower.endswith((".jpg", ".jpeg", ".png", ".webp")):
+            event_type = "image_upload"
+        elif filename_lower.endswith((".mp3", ".wav", ".m4a")):
+            event_type = "audio_upload"
+        
         # Add timeline event
         add_timeline_event(
-            title=f"PDF Uploaded: {file.filename}",
-            description=f"Successfully processed {parsed.page_count} pages into {len(chunks)} chunks.",
-            event_type="pdf_upload",
+            title=f"File Uploaded: {file.filename}",
+            description=f"Successfully processed into {len(chunks)} chunks.",
+            event_type=event_type,
             related_document=doc_id
         )
 
-        print(f"[Upload] Document '{file.filename}' processed successfully! "
-              f"({parsed.page_count} pages, {len(chunks)} chunks)")
+        print(f"[Upload] Document '{file.filename}' processed successfully! ({len(chunks)} chunks)")
 
         return UploadResponse(
             id=doc_id,
             filename=file.filename,
             status="ready",
-            message=f"Successfully processed {parsed.page_count} pages into {len(chunks)} chunks.",
+            message=f"Successfully processed into {len(chunks)} chunks.",
         )
 
     except Exception as e:

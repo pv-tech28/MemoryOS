@@ -379,3 +379,269 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!res.ok) throw new Error("Failed to fetch dashboard stats");
   return res.json();
 }
+
+/* ─── Daily Summary ─── */
+
+export interface DailySummaryStats {
+  new_documents: number;
+  emails_found: number;
+  upcoming_meetings: number;
+  connections_made: number;
+  sources_active: number;
+}
+
+export interface DailySummaryHighlight {
+  icon: string;
+  title: string;
+  desc: string;
+  color: string;
+}
+
+export interface DailySummaryResponse {
+  stats: DailySummaryStats;
+  highlights: DailySummaryHighlight[];
+  insights: string[];
+}
+
+export async function getDailySummary(): Promise<DailySummaryResponse> {
+  const res = await fetch(`${API_BASE}/dashboard/daily-summary`);
+  if (!res.ok) throw new Error("Failed to fetch daily summary");
+  return res.json();
+}
+
+/* ─── Settings ─── */
+
+export interface Profile {
+  id: string;
+  email: string;
+  display_name: string;
+  username: string;
+  bio: string | null;
+  profile_picture_url: string | null;
+  email_verified: boolean;
+}
+
+export interface UserSettings {
+  theme: "dark" | "light" | "system";
+  push_notifications: boolean;
+  email_notifications: boolean;
+  daily_summary_notifications: boolean;
+  memory_update_notifications: boolean;
+  sync_completion_notifications: boolean;
+  ai_activity_notifications: boolean;
+  sound_enabled: boolean;
+  language: string;
+  data_sharing_enabled: boolean;
+  ai_training_consent: boolean;
+  store_chat_history: boolean;
+  memory_retention_period: string;
+  auto_memory_extraction: boolean;
+  auto_graph_building: boolean;
+  auto_daily_summary: boolean;
+  auto_source_sync: boolean;
+  auto_ai_insights: boolean;
+  ai_provider: "openrouter" | "deepseek" | "gemini";
+  response_length: "short" | "medium" | "detailed";
+  creativity_level: "low" | "medium" | "high";
+}
+
+export interface ConnectedSource {
+  connected: boolean;
+  last_sync: string | null;
+  count: number;
+}
+
+export interface ConnectedSources {
+  gmail: ConnectedSource;
+  drive: ConnectedSource;
+  calendar: ConnectedSource;
+}
+
+export interface StorageStats {
+  documents_uploaded: number;
+  memories_stored: number;
+  memory_nodes: number;
+  graph_connections: number;
+  storage_used_bytes: number;
+  storage_used_mb: number;
+}
+
+export async function getProfile(): Promise<Profile> {
+  const res = await fetch(`${API_BASE}/settings/profile`);
+  if (!res.ok) throw new Error("Failed to get profile");
+  return res.json();
+}
+
+export async function updateProfile(data: Partial<{
+  display_name: string;
+  username: string;
+  bio: string;
+}>): Promise<Profile> {
+  const res = await fetch(`${API_BASE}/settings/profile`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error("Failed to update profile");
+  return res.json();
+}
+
+export async function uploadProfilePicture(file: File): Promise<{ profile_picture_url: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/settings/profile/picture`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error("Failed to upload profile picture");
+  return res.json();
+}
+
+export async function getEmailSettings(): Promise<{ email: string; email_verified: boolean }> {
+  const res = await fetch(`${API_BASE}/settings/email`);
+  if (!res.ok) throw new Error("Failed to get email settings");
+  return res.json();
+}
+
+export async function updateEmail(newEmail: string): Promise<{ email: string; email_verified: boolean }> {
+  const res = await fetch(`${API_BASE}/settings/email`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ new_email: newEmail })
+  });
+  if (!res.ok) throw new Error("Failed to update email");
+  return res.json();
+}
+
+export async function sendVerificationEmail(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/email/send-verification`, {
+    method: "POST"
+  });
+  if (!res.ok) throw new Error("Failed to send verification email");
+  return res.json();
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/password/change`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+  });
+  if (!res.ok) throw new Error("Failed to change password");
+  return res.json();
+}
+
+export async function updateTwoFactor(enabled: boolean): Promise<{ two_factor_enabled: boolean }> {
+  const res = await fetch(`${API_BASE}/settings/security/two-factor`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  if (!res.ok) throw new Error("Failed to update two-factor settings");
+  return res.json();
+}
+
+export async function getAllSettings(): Promise<UserSettings> {
+  const res = await fetch(`${API_BASE}/settings/all`);
+  if (!res.ok) throw new Error("Failed to get all settings");
+  return res.json();
+}
+
+export async function updateAllSettings(data: Partial<UserSettings>): Promise<UserSettings> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      params.set(key, String(value));
+    }
+  }
+  
+  const res = await fetch(`${API_BASE}/settings/all?${params.toString()}`, {
+    method: "PUT"
+  });
+  if (!res.ok) throw new Error("Failed to update settings");
+  return res.json();
+}
+
+export async function getConnectedSources(): Promise<ConnectedSources> {
+  const res = await fetch(`${API_BASE}/settings/connected-sources`);
+  if (!res.ok) throw new Error("Failed to get connected sources");
+  return res.json();
+}
+
+export async function syncSource(source: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/connected-sources/${source}/sync`, {
+    method: "POST"
+  });
+  if (!res.ok) throw new Error(`Failed to sync ${source}`);
+  return res.json();
+}
+
+export async function disconnectSource(source: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/connected-sources/${source}`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error(`Failed to disconnect ${source}`);
+  return res.json();
+}
+
+export async function deleteDocuments(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/data/documents`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error("Failed to delete documents");
+  return res.json();
+}
+
+export async function deleteMemoryGraph(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/data/memory-graph`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error("Failed to delete memory graph");
+  return res.json();
+}
+
+export async function deleteConversations(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/data/conversations`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error("Failed to delete conversations");
+  return res.json();
+}
+
+export async function deleteGmailData(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/data/gmail`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error("Failed to delete Gmail data");
+  return res.json();
+}
+
+export async function deleteDriveData(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/data/drive`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error("Failed to delete Drive data");
+  return res.json();
+}
+
+export async function deleteCalendarData(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/data/calendar`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error("Failed to delete Calendar data");
+  return res.json();
+}
+
+export async function deleteAllData(): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/settings/data/all`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error("Failed to delete all data");
+  return res.json();
+}
+
+export async function getStorageStats(): Promise<StorageStats> {
+  const res = await fetch(`${API_BASE}/settings/storage/stats`);
+  if (!res.ok) throw new Error("Failed to get storage stats");
+  return res.json();
+}

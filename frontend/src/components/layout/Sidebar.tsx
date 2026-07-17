@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import {
   Home,
   MessageCircle,
@@ -15,6 +16,7 @@ import {
   ChevronDown,
   Brain,
 } from "lucide-react";
+import { getProfile, Profile } from "@/lib/api";
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
@@ -29,6 +31,24 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const data = await getProfile();
+        setProfile(data);
+      } catch (err) {
+        console.error("Failed to load profile:", err);
+      }
+    };
+    loadProfile();
+  }, []);
+
+  const getInitials = (name: string | null) => {
+    if (!name) return "U";
+    return name.charAt(0).toUpperCase();
+  };
 
   return (
     <aside
@@ -99,34 +119,44 @@ export default function Sidebar() {
       </div>
 
       {/* User Profile */}
-      <div
-        className="mx-3 mb-4 p-3 rounded-xl flex items-center gap-3 cursor-pointer"
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid var(--border)",
-        }}
-      >
+      <Link href="/settings/profile">
         <div
-          className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
+          className="mx-3 mb-4 p-3 rounded-xl flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
           style={{
-            background: "linear-gradient(135deg, #6c5ce7, #e84393)",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
           }}
         >
-          ST
+          {profile?.profile_picture_url ? (
+            <img
+              src={`http://localhost:8000${profile.profile_picture_url}`}
+              alt="Profile"
+              className="w-9 h-9 rounded-full object-cover"
+            />
+          ) : (
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
+              style={{
+                background: "linear-gradient(135deg, #6c5ce7, #e84393)",
+              }}
+            >
+              {getInitials(profile?.display_name)}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white truncate">
+              {profile?.display_name || "User"}
+            </p>
+            <p
+              className="text-[11px] font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              Free Plan
+            </p>
+          </div>
+          <ChevronDown size={14} style={{ color: "var(--text-muted)" }} />
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate">
-            Siddh Tyagi
-          </p>
-          <p
-            className="text-[11px] font-medium"
-            style={{ color: "var(--accent)" }}
-          >
-            Pro Plan
-          </p>
-        </div>
-        <ChevronDown size={14} style={{ color: "var(--text-muted)" }} />
-      </div>
+      </Link>
     </aside>
   );
 }

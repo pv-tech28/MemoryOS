@@ -54,8 +54,12 @@ export default function UploadPage() {
   };
 
   const handleUpload = useCallback(async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setErrorMessage("Only PDF files are supported.");
+    const supportedExtensions = [".pdf", ".docx", ".txt", ".jpg", ".jpeg", ".png", ".webp", ".mp3", ".wav", ".m4a"];
+    const hasSupportedExtension = supportedExtensions.some(ext => 
+      file.name.toLowerCase().endsWith(ext)
+    );
+    if (!hasSupportedExtension) {
+      setErrorMessage("Only PDF, DOCX, TXT, images (JPG/JPEG/PNG/WEBP), and audio (MP3/WAV/M4A) are supported.");
       setUploadStatus("error");
       return;
     }
@@ -96,6 +100,12 @@ export default function UploadPage() {
     }
   }, []);
 
+  const handleFiles = useCallback(async (files: FileList) => {
+    for (let i = 0; i < files.length; i++) {
+      await handleUpload(files[i]);
+    }
+  }, [handleUpload]);
+
   const handleDelete = async (docId: string) => {
     try {
       await deleteDocument(docId);
@@ -109,18 +119,18 @@ export default function UploadPage() {
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file) handleUpload(file);
+      const files = e.dataTransfer.files;
+      if (files.length > 0) handleFiles(files);
     },
-    [handleUpload]
+    [handleFiles]
   );
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleUpload(file);
+      const files = e.target.files;
+      if (files && files.length > 0) handleFiles(files);
     },
-    [handleUpload]
+    [handleFiles]
   );
 
   const formatFileSize = (bytes: number) => {
@@ -183,7 +193,10 @@ export default function UploadPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf"
+              multiple
+              webkitdirectory=""
+              directory=""
+              accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.webp,.mp3,.wav,.m4a"
               className="hidden"
               onChange={handleFileSelect}
             />
@@ -211,13 +224,13 @@ export default function UploadPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white">
-                      Drag & drop your PDF here
+                      Drag & drop your files here
                     </p>
                     <p
                       className="text-xs mt-1"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      or click to browse • PDF files only
+                      or click to browse • PDF, DOCX, TXT, images, audio, or folders
                     </p>
                   </div>
                 </motion.div>

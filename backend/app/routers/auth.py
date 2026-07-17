@@ -5,6 +5,9 @@ Handles Google OAuth2 for Gmail, Drive, and Calendar integrations.
 
 import os
 import json
+import secrets
+import hashlib
+import base64
 from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
@@ -57,6 +60,15 @@ class DatabaseUserCredentialsDict(dict):
 # Expose user_credentials for backward compatibility with sources.py
 user_credentials = DatabaseUserCredentialsDict()
 
+def generate_code_verifier() -> str:
+    """Generate a cryptographically secure code verifier for PKCE."""
+    return secrets.token_urlsafe(96)
+
+def generate_code_challenge(code_verifier: str) -> str:
+    """Generate a code challenge from a code verifier using S256 method."""
+    code_challenge = hashlib.sha256(code_verifier.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(code_challenge).rstrip(b"=").decode("utf-8")
+
 def get_flow() -> Flow:
     """Create OAuth2 flow instance."""
     return Flow.from_client_config(
@@ -79,16 +91,27 @@ async def google_login(request: Request):
     if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET]):
         raise HTTPException(status_code=500, detail="Google OAuth credentials not configured")
     
+    # Generate PKCE code verifier and challenge manually
+    code_verifier = generate_code_verifier()
+    code_challenge = generate_code_challenge(code_verifier)
+    
     flow = get_flow()
     authorization_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",  # Ensure we get a refresh token
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
     )
     
     # Store state and code verifier in session
     request.session["oauth_state"] = state
-    request.session["oauth_code_verifier"] = flow.code_verifier
+    request.session["oauth_code_verifier"] = code_verifier
+    
+    # Detailed logging
+    print(f"[GoogleOAuth] Generated state: {state}")
+    print(f"[GoogleOAuth] Generated code_verifier: {code_verifier}")
+    print(f"[GoogleOAuth] Session contents after login: {dict(request.session)}")
     
     return RedirectResponse(url=authorization_url)
 
@@ -96,22 +119,32 @@ async def google_login(request: Request):
 async def google_callback(request: Request):
     """Handle OAuth2 callback and store credentials."""
     try:
+        # Detailed logging of callback
+        print(f"[GoogleOAuth] Callback query params: {dict(request.query_params)}")
+        print(f"[GoogleOAuth] Session contents at callback: {dict(request.session)}")
+        
         # Validate state
         returned_state = request.query_params.get("state")
         stored_state = request.session.get("oauth_state")
+        print(f"[GoogleOAuth] Returned state: {returned_state}")
+        print(f"[GoogleOAuth] Stored state: {stored_state}")
+        
         if not returned_state or not stored_state or returned_state != stored_state:
             raise HTTPException(status_code=400, detail="Invalid state parameter")
         
         # Get code and stored code verifier
         code = request.query_params.get("code")
         code_verifier = request.session.get("oauth_code_verifier")
+        print(f"[GoogleOAuth] Callback code: {code}")
+        print(f"[GoogleOAuth] Retrieved code_verifier: {code_verifier}")
+        
         if not code or not code_verifier:
             raise HTTPException(status_code=400, detail="Missing code or code verifier")
         
         # Recreate flow and use stored code verifier
         flow = get_flow()
         flow.code_verifier = code_verifier
-        flow.fetch_token(code=code)
+        flow.fetch_token(code=code, code_verifier=code_verifier)
         credentials = flow.credentials
         
         # Clear session data

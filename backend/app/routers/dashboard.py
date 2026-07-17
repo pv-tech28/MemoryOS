@@ -207,3 +207,148 @@ async def get_dashboard_stats():
         "upcoming_events_label": upcoming_events_label,
         "graph_has_data": graph_has_data,
     }
+
+
+@router.get("/daily-summary")
+async def get_daily_summary():
+    """
+    Get daily summary stats, highlights, and AI insights for the Daily Summary page
+    """
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+    db = SessionLocal()
+    
+    try:
+        # --- 1. Load all documents ---
+        docs = DocumentRepository.list_all(db, user_id="default_user")
+        doc_dicts = [DocumentRepository.to_dict(d) for d in docs]
+        
+        # --- Stats ---
+        # New Documents Processed today
+        today_docs = [
+            d for d in doc_dicts
+            if (d.get("source", "upload") == "upload" and 
+                datetime.fromisoformat(d["uploaded_at"].rstrip("Z")) >= today_start)
+        ]
+        new_docs_count = len(today_docs)
+        doc_names = [d["filename"] for d in today_docs]
+        
+        # Emails Found (from Gmail source)
+        emails = [d for d in doc_dicts if d.get("source") == "gmail"]
+        email_count = len(emails)
+        important_emails = [d["filename"] for d in emails]
+        
+        # Upcoming Meetings (from Calendar source)
+        calendar_events = [d for d in doc_dicts if d.get("source") == "calendar"]
+        upcoming_meetings = [
+            {
+                "title": d["filename"],
+                "date": d["uploaded_at"]
+            } for d in calendar_events
+        ]
+        
+        # Sources Active
+        source_counts = DocumentRepository.count_by_source(db, user_id="default_user")
+        active_sources_count = sum(
+            1 for src, count in source_counts.items() if count > 0
+        ) + (1 if source_counts.get("document", 0) > 0 else 0)  # count uploaded docs as source
+        
+        # Connections Made Today from graph
+        graph_service = get_graph_service()
+        all_edges = graph_service.get_all_edges()
+        new_connections_today = 0
+        for edge in all_edges:
+            try:
+                created_at = datetime.fromisoformat(edge.created_at)
+                if created_at >= today_start:
+                    new_connections_today +=1
+            except Exception:
+                pass
+        
+        # --- Highlights ---
+        highlights = []
+        
+        if new_docs_count > 0:
+            highlights.append({
+                "icon": "FileText",
+                "title": f"{new_docs_count} new document{'s' if new_docs_count !=1 else ''} processed",
+                "desc": ", ".join(doc_names[:3]) + ("" if len(doc_names) <=3 else f", and {len(doc_names)-3} more"),
+                "color": "#4facfe",
+            })
+        
+        if email_count >0:
+            highlights.append({
+                "icon": "Mail",
+                "title": f"{email_count} email{'s' if email_count !=1 else ''} found",
+                "desc": ", ".join(important_emails[:3]) + ("" if len(important_emails) <=3 else f", and {len(important_emails)-3} more"),
+                "color": "#ea4335",
+            })
+        
+        if len(upcoming_meetings) >0:
+            highlights.append({
+                "icon": "Calendar",
+                "title": f"{len(upcoming_meetings)} upcoming meeting{'s' if len(upcoming_meetings) !=1 else ''}",
+                "desc": upcoming_meetings[0]["title"],
+                "color": "#f0a500",
+            })
+        
+        if new_connections_today >0:
+            highlights.append({
+                "icon": "GitCommit",
+                "title": f"{new_connections_today} new connection{'s' if new_connections_today !=1 else ''} made",
+                "desc": "New relationships discovered in your data.",
+                "color": "#f0f0f0",
+            })
+        
+        # --- AI Insights ---
+        insights = []
+        all_nodes = graph_service.get_all_nodes()
+        
+        if all_nodes:
+            # Most referenced topic/entity
+            node_types = {}
+            for node in all_nodes:
+                t = node.type
+                node_types[t] = node_types.get(t, 0) + 1
+            most_common_type = max(node_types, key=lambda k: node_types[k]) if node_types else "Topic"
+            insights.append(f"The most common entity type today is '{most_common_type}' ({node_types.get(most_common_type,0)} times).")
+            
+            # Most active source
+            max_source = max(source_counts, key=lambda k: source_counts[k]) if source_counts else "documents"
+            insights.append(f"Your most active data source today is '{max_source}' ({source_counts.get(max_source,0)} items).")
+            
+            # Most frequent entity
+            if all_nodes:
+                top_node = max(all_nodes, key=lambda n: n.importance)
+                insights.append(f"'{top_node.name}' appears frequently and has a high importance score.")
+        
+        # Return all data
+        return {
+            "stats": {
+                "new_documents": new_docs_count,
+                "emails_found": email_count,
+                "upcoming_meetings": len(upcoming_meetings),
+                "connections_made": new_connections_today,
+                "sources_active": active_sources_count,
+            },
+            "highlights": highlights,
+            "insights": insights
+        }
+        
+    except Exception as e:
+        print(f"Error getting daily summary: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "stats": {
+                "new_documents": 0,
+                "emails_found": 0,
+                "upcoming_meetings": 0,
+                "connections_made": 0,
+                "sources_active": 0,
+            },
+            "highlights": [],
+            "insights": []
+        }
+    finally:
+        db.close()

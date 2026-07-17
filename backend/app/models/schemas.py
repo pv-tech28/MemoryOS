@@ -3,6 +3,35 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
+class ProfileUpdate(BaseModel):
+    display_name: Optional[str] = None
+    username: Optional[str] = None
+    bio: Optional[str] = None
+
+
+class ProfileResponse(BaseModel):
+    id: str
+    email: Optional[str]
+    display_name: Optional[str]
+    username: Optional[str]
+    bio: Optional[str]
+    profile_picture_url: Optional[str]
+    email_verified: bool
+
+
+class EmailUpdate(BaseModel):
+    new_email: str
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class TwoFactorUpdate(BaseModel):
+    enabled: bool
+
+
 class DocumentResponse(BaseModel):
     """Response model for a single uploaded document."""
     id: str

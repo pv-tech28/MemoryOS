@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from app.database import init_database
-from app.routers import documents, chat, memory_graph, auth, sources, memories, timeline, dashboard
+from app.routers import documents, chat, memory_graph, auth, sources, memories, timeline, dashboard, settings
 
 load_dotenv()
 
@@ -59,6 +59,11 @@ app.include_router(sources.router)
 app.include_router(memories.router)
 app.include_router(timeline.router)
 app.include_router(dashboard.router)
+app.include_router(settings.router)
+
+# Serve uploaded profile pictures as static files
+from fastapi.staticfiles import StaticFiles
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 @app.get("/api/health")

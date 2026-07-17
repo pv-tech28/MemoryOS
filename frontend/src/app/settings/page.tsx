@@ -2,7 +2,7 @@
 
 import AppLayout from "@/components/layout/AppLayout";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   User,
   Bell,
@@ -16,7 +16,13 @@ import {
   Volume2,
   Mail,
   Trash2,
+  Cpu,
+  Save,
+  HardDrive,
+  FolderGit2
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { getProfile, Profile } from "@/lib/api";
 
 interface SettingsItem {
   icon: any;
@@ -26,6 +32,7 @@ interface SettingsItem {
   toggle?: boolean;
   on?: boolean;
   id: string;
+  path: string;
 }
 
 interface SettingsSection {
@@ -37,50 +44,49 @@ const initialSettingsSections: SettingsSection[] = [
   {
     title: "Account",
     items: [
-      { icon: User, label: "Profile", desc: "Manage your name, avatar and preferences", color: "#4facfe", id: "profile" },
-      { icon: Mail, label: "Email", desc: "siddh.tyagi@gmail.com", color: "#ea4335", id: "email" },
-      { icon: Key, label: "Password & Security", desc: "Update password and 2FA settings", color: "#f0a500", id: "security" },
+      { icon: User, label: "Profile", desc: "Manage your name, avatar and preferences", color: "#4facfe", id: "profile", path: "/settings/profile" },
+      { icon: Mail, label: "Email", desc: "Change your email address", color: "#ea4335", id: "email", path: "/settings/email" },
+      { icon: Key, label: "Password & Security", desc: "Update password and 2FA settings", color: "#f0a500", id: "security", path: "/settings/password-security" },
     ],
   },
   {
     title: "Preferences",
     items: [
-      { icon: Palette, label: "Appearance", desc: "Dark mode, colors and layout", color: "#6c5ce7", toggle: true, on: true, id: "appearance" },
-      { icon: Bell, label: "Notifications", desc: "Manage push and email notifications", color: "#00d68f", toggle: true, on: true, id: "notifications" },
-      { icon: Volume2, label: "Sound Effects", desc: "Toggle UI sound effects", color: "#e84393", toggle: true, on: false, id: "sound" },
-      { icon: Globe, label: "Language", desc: "English (US)", color: "#4facfe", id: "language" },
+      { icon: Palette, label: "Appearance", desc: "Dark mode, colors and layout", color: "#6c5ce7", id: "appearance", path: "/settings/appearance" },
+      { icon: Bell, label: "Notifications", desc: "Manage push and email notifications", color: "#00d68f", id: "notifications", path: "/settings/notifications" },
+      { icon: Volume2, label: "Sound Effects", desc: "Toggle UI sound effects", color: "#e84393", id: "sound", path: "/settings/sound" },
+      { icon: Globe, label: "Language", desc: "Choose your language", color: "#4facfe", id: "language", path: "/settings/language" },
+    ],
+  },
+  {
+    title: "MemoryOS",
+    items: [
+      { icon: Cpu, label: "Memory Preferences", desc: "Auto-extract, auto-graph, etc.", color: "#6c5ce7", id: "memory", path: "/settings/memory" },
+      { icon: Save, label: "AI Settings", desc: "Provider, response length, creativity", color: "#00d68f", id: "ai", path: "/settings/ai" },
+      { icon: HardDrive, label: "Data & Storage", desc: "See usage, export data", color: "#4facfe", id: "storage", path: "/settings/storage" },
     ],
   },
   {
     title: "Data & Privacy",
     items: [
-      { icon: Database, label: "Connected Sources", desc: "6 sources connected", color: "#00d68f", id: "sources" },
-      { icon: Shield, label: "Privacy", desc: "Data sharing and retention settings", color: "#f0a500", id: "privacy" },
-      { icon: Trash2, label: "Delete Data", desc: "Remove all indexed memories", color: "#ff6b6b", id: "delete-data" },
+      { icon: FolderGit2, label: "Connected Sources", desc: "Manage connected sources", color: "#00d68f", id: "sources", path: "/settings/sources" },
+      { icon: Shield, label: "Privacy", desc: "Data sharing and retention settings", color: "#f0a500", id: "privacy", path: "/settings/privacy" },
+      { icon: Trash2, label: "Delete Data", desc: "Remove all indexed memories", color: "#ff6b6b", id: "delete-data", path: "/settings/delete-data" },
     ],
   },
 ];
 
 export default function SettingsPage() {
-  const [settingsSections, setSettingsSections] = useState<SettingsSection[]>(initialSettingsSections);
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
 
-  const handleToggle = (sectionTitle: string, itemId: string) => {
-    setSettingsSections((prev) =>
-      prev.map((section) => {
-        if (section.title === sectionTitle) {
-          return {
-            ...section,
-            items: section.items.map((item) =>
-              item.id === itemId && item.toggle !== undefined
-                ? { ...item, on: !item.on }
-                : item
-            ),
-          };
-        }
-        return section;
-      })
-    );
-  };
+  useEffect(() => {
+    async function fetchData() {
+      const p = await getProfile();
+      setProfile(p);
+    }
+    fetchData();
+  }, []);
 
   return (
     <AppLayout>
@@ -99,21 +105,22 @@ export default function SettingsPage() {
 
         {/* Profile Card */}
         <motion.div
-          className="card p-6 flex items-center gap-5 mb-8"
+          className="card p-6 flex items-center gap-5 mb-8 cursor-pointer"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.5 }}
+          onClick={() => router.push("/settings/profile")}
         >
           <div
             className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold"
             style={{ background: "linear-gradient(135deg, #6c5ce7, #e84393)" }}
           >
-            ST
+            {profile?.display_name ? profile.display_name.charAt(0).toUpperCase() : "S"}
           </div>
           <div className="flex-1">
-            <h2 className="text-lg font-bold text-white">Siddh Tyagi</h2>
+            <h2 className="text-lg font-bold text-white">{profile?.display_name || "User"}</h2>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              siddh.tyagi@gmail.com
+              {profile?.email || "email@example.com"}
             </p>
             <span
               className="inline-block mt-1 px-3 py-0.5 rounded-full text-[10px] font-semibold"
@@ -122,16 +129,11 @@ export default function SettingsPage() {
               Pro Plan
             </span>
           </div>
-          <button
-            className="px-4 py-2 rounded-xl text-xs font-semibold"
-            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-          >
-            Edit Profile
-          </button>
+          <ChevronRight size={20} style={{ color: "var(--text-muted)" }} />
         </motion.div>
 
         {/* Settings Sections */}
-        {settingsSections.map((section, si) => (
+        {initialSettingsSections.map((section, si) => (
           <motion.div
             key={section.title}
             className="mb-8"
@@ -158,6 +160,7 @@ export default function SettingsPage() {
                     style={{
                       borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none",
                     }}
+                    onClick={() => router.push(item.path)}
                   >
                     <div
                       className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -171,27 +174,7 @@ export default function SettingsPage() {
                         {item.desc}
                       </p>
                     </div>
-                    {"toggle" in item ? (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggle(section.title, item.id);
-                        }}
-                        className="w-10 h-6 rounded-full relative cursor-pointer transition-colors"
-                        style={{
-                          background: item.on ? "var(--accent)" : "var(--bg-elevated)",
-                          border: `1px solid ${item.on ? "var(--accent)" : "var(--border)"}`,
-                          padding: "2px",
-                        }}
-                      >
-                        <div
-                          className="w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all"
-                          style={{ left: item.on ? "calc(100% - 18px)" : "2px" }}
-                        />
-                      </div>
-                    ) : (
-                      <ChevronRight size={16} style={{ color: "var(--text-muted)" }} />
-                    )}
+                    <ChevronRight size={16} style={{ color: "var(--text-muted)" }} />
                   </div>
                 );
               })}

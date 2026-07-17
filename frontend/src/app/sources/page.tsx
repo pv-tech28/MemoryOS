@@ -43,24 +43,24 @@ const uploadZones = [
   },
   {
     icon: Image,
-    title: "Upload Images (Coming Soon)",
+    title: "Upload Images",
     desc: "Drag & drop images here or click to browse",
     color: "#e84393",
-    isPdf: false,
+    isPdf: true, // Now link to upload page
   },
   {
     icon: Mic,
-    title: "Upload Audio (Coming Soon)",
+    title: "Upload Audio",
     desc: "Drag & drop audio files here or click to browse",
     color: "#f0a500",
-    isPdf: false,
+    isPdf: true, // Now link to upload page
   },
   {
     icon: FolderUp,
-    title: "Upload Folder (Coming Soon)",
+    title: "Upload Folder",
     desc: "Upload a folder from your device",
     color: "#00d68f",
-    isPdf: false,
+    isPdf: true, // Now link to upload page
   },
 ];
 
