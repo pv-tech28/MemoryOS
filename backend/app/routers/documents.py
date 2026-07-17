@@ -20,11 +20,23 @@ from app.services.memory_graph_builder import get_graph_service, EntityNode
 from app.services.timeline_service import add_timeline_event
 from dotenv import load_dotenv
 
-# New imports for additional file types
-import docx
-from PIL import Image
-import pytesseract
-import whisper
+# New imports for additional file types (optional)
+try:
+    import docx
+except ImportError:
+    docx = None
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+try:
+    import pytesseract
+except ImportError:
+    pytesseract = None
+try:
+    import whisper
+except ImportError:
+    whisper = None
 
 load_dotenv()
 
@@ -32,11 +44,13 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
 
-# Initialize Whisper model (load once)
+# Initialize Whisper model (load once, optional)
 _whisper_model = None
 
 def get_whisper_model():
     global _whisper_model
+    if whisper is None:
+        raise RuntimeError("whisper not installed, audio parsing unavailable")
     if _whisper_model is None:
         print("[Whisper] Loading Whisper model (base)...")
         _whisper_model = whisper.load_model("base")
@@ -54,6 +68,8 @@ def parse_txt(file_path: str) -> tuple[str, dict]:
 
 def parse_docx(file_path: str) -> tuple[str, dict]:
     """Parse DOCX file."""
+    if docx is None:
+        raise RuntimeError("python-docx not installed, DOCX parsing unavailable")
     doc = docx.Document(file_path)
     full_text = []
     for para in doc.paragraphs:
@@ -63,12 +79,16 @@ def parse_docx(file_path: str) -> tuple[str, dict]:
 
 def parse_image(file_path: str) -> tuple[str, dict]:
     """Parse image using OCR (pytesseract)."""
+    if Image is None or pytesseract is None:
+        raise RuntimeError("Pillow or pytesseract not installed, image OCR unavailable")
     img = Image.open(file_path)
     text = pytesseract.image_to_string(img)
     return text, {}
 
 def parse_audio(file_path: str) -> tuple[str, dict]:
     """Parse audio using Whisper speech to text."""
+    if whisper is None:
+        raise RuntimeError("whisper not installed, audio parsing unavailable")
     model = get_whisper_model()
     result = model.transcribe(file_path)
     return result["text"], {"language": result.get("language")}
