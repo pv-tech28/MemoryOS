@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.db_models import TimelineEventModel
 
 
-DEFAULT_USER_ID = "default"
+DEFAULT_USER_ID = "default_user"
 
 # Color map for event types
 COLOR_MAP = {

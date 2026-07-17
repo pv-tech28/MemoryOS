@@ -10,7 +10,7 @@ from sqlalchemy import func
 from app.models.db_models import Memory
 
 
-DEFAULT_USER_ID = "default"
+DEFAULT_USER_ID = "default_user"
 
 
 class MemoryRepository:

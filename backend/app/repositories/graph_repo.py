@@ -11,7 +11,7 @@ from sqlalchemy import or_, func
 from app.models.db_models import GraphNodeModel, GraphEdgeModel
 
 
-DEFAULT_USER_ID = "default"
+DEFAULT_USER_ID = "default_user"
 
 
 class GraphRepository:

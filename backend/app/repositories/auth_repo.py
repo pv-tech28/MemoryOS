@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.db_models import GoogleCredential
 
 
-DEFAULT_USER_ID = "default"
+DEFAULT_USER_ID = "default_user"
 
 
 class AuthRepository:
