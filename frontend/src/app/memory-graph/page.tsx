@@ -119,9 +119,9 @@ function CustomConnectionEdge({
         id={id}
         style={{
           ...style,
-          stroke: "#A855F7",
-          strokeWidth: 2,
-          strokeDasharray: "5 5",
+          stroke: style.stroke || "#A855F7",
+          strokeWidth: style.strokeWidth || 2.2,
+          strokeDasharray: style.strokeDasharray || "6 6",
           opacity: finalOpacity,
         }}
         className="react-flow__edge-path"
@@ -134,17 +134,19 @@ function CustomConnectionEdge({
             style={{
               position: "absolute",
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              background: "rgba(15, 23, 42, 0.95)",
-              padding: "4px 8px",
-              borderRadius: "6px",
-              border: "1px solid rgba(168, 85, 247, 0.4)",
-              fontSize: "10px",
-              fontWeight: 600,
-              color: "#C084FC",
+              background: "rgba(9, 13, 24, 0.98)",
+              padding: "5px 10px",
+              borderRadius: "9999px", // Pill style
+              border: "1px solid rgba(168, 85, 247, 0.7)",
+              fontSize: "11px",
+              fontWeight: 700,
+              color: "#F3E8FF", // Super bright light purple
+              letterSpacing: "0.05em",
               pointerEvents: "none",
               opacity: finalOpacity,
               whiteSpace: "nowrap",
-              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)",
+              boxShadow: "0 0 10px rgba(168, 85, 247, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.5)",
+              textShadow: "0 0 4px rgba(168, 85, 247, 0.4)",
             }}
             className="nodrag nopan"
           >
@@ -529,8 +531,11 @@ function MemoryGraphContent() {
       const isSelected = selectedNode && selectedNode.id === node.id;
       
       let opacity = 1.0;
+      let filter = undefined;
       if (hasHighlightActive) {
-        opacity = (isHighlighted || isSelected) ? 1.0 : 0.15;
+        const active = isHighlighted || isSelected;
+        opacity = active ? 1.0 : 0.2;
+        filter = active ? "drop-shadow(0 0 15px rgba(168,85,247,0.4))" : "blur(1.5px)";
       }
 
       return {
@@ -542,6 +547,8 @@ function MemoryGraphContent() {
         style: {
           ...node.style,
           opacity,
+          filter,
+          transition: "opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease",
         },
       };
     });
@@ -557,7 +564,7 @@ function MemoryGraphContent() {
 
         let opacity = 1.0;
         if (hasHighlightActive) {
-          opacity = isHighlightedEdge ? 1.0 : 0.1;
+          opacity = isHighlightedEdge ? 1.0 : 0.08;
         }
 
         return {
@@ -565,7 +572,11 @@ function MemoryGraphContent() {
           animated: hasHighlightActive ? isHighlightedEdge : edge.animated,
           style: {
             ...edge.style,
+            stroke: isHighlightedEdge ? "#D8B4FE" : "#A855F7", // Brighter highlight
+            strokeWidth: isHighlightedEdge ? 3.5 : 2.2, // Bolder when highlighted
+            strokeDasharray: isHighlightedEdge ? "6 3" : "6 6",
             opacity,
+            transition: "opacity 0.3s ease, stroke-width 0.3s ease, stroke 0.3s ease",
           },
         };
       });
