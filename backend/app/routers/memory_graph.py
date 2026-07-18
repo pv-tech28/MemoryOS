@@ -74,21 +74,7 @@ async def get_memory_graph():
         # Format for frontend
         formatted_nodes = []
         node_id_map = {}
-        # Add user central node
-        user_node = {
-            "id": "user",
-            "label": "User",
-            "category": "Person",
-            "color": NODE_COLORS["Person"],
-            "radius": 45,
-            "description": "Owner of this memory vault",
-            "date": datetime.now().strftime("%d %b %Y"),
-            "owner": "self",
-            "type": "Person",
-            "connections": [],
-        }
-        formatted_nodes.append(user_node)
-        node_id_map["user"] = user_node
+
         
         # Add entity nodes
         for node in nodes:
@@ -142,43 +128,38 @@ async def get_memory_graph():
             }
             formatted_nodes.append(doc_node)
             node_id_map[doc_id] = doc_node
-            user_node["connections"].append(filename)
         
         # Format edges and build connections
         formatted_edges = []
         edge_set = set()
         
-        # Add entity edges first
+        # Add entity edges only (from graph service, no duplicate Connected edges!)
         for edge in edges:
             if edge.source_id in node_id_map and edge.target_id in node_id_map:
                 edge_key = (edge.source_id, edge.target_id, edge.type)
                 if edge_key not in edge_set:
                     formatted_edges.append({
+                        "id": edge.id,
                         "source": edge.source_id,
                         "target": edge.target_id,
                         "label": edge.type,
-                        "description": edge.description
+                        "relationship": edge.type,
+                        "confidence": edge.strength or 1.0,
+                        "animated": True,
+                        "markerEnd": {
+                            "type": "arrowclosed",
+                            "color": "#A855F7"
+                        }
                     })
                     edge_set.add(edge_key)
                 # Add connections for display
-                node_id_map[edge.source_id]["connections"].append(
-                    node_id_map[edge.target_id]["label"]
-                )
-                node_id_map[edge.target_id]["connections"].append(
-                    node_id_map[edge.source_id]["label"]
-                )
-        
-        # Connect documents to user once per doc
-        for doc in metadata.values():
-            doc_node_id = f"doc_{doc['id']}"
-            edge_key = ("user", doc_node_id, "Connected")
-            if edge_key not in edge_set:
-                formatted_edges.append({
-                    "source": "user",
-                    "target": doc_node_id,
-                    "label": "Connected"
-                })
-                edge_set.add(edge_key)
+                if edge.source_id in node_id_map and edge.target_id in node_id_map:
+                    node_id_map[edge.source_id]["connections"].append(
+                        node_id_map[edge.target_id]["label"]
+                    )
+                    node_id_map[edge.target_id]["connections"].append(
+                        node_id_map[edge.source_id]["label"]
+                    )
         
         # Remove duplicate connections
         for node in formatted_nodes:
@@ -327,6 +308,18 @@ async def get_smart_recommendations(limit: int = Query(10, ge=1, le=50)):
             })
         
         return {"recommendations": formatted}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stats")
+async def get_graph_stats():
+    """Get comprehensive graph statistics including communities, central nodes, etc."""
+    try:
+        graph_service = get_graph_service()
+        return graph_service.get_stats()
     except Exception as e:
         import traceback
         traceback.print_exc()

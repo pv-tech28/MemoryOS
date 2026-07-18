@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/memories", tags=["memories"])
 
 
 @router.get("", response_model=MemoryListResponse)
-def list_memories(user_id: str = "default", chat_id: str | None = None):
+def list_memories(user_id: str = "default_user", chat_id: str | None = None):
     """List all memories."""
     try:
         if chat_id:
@@ -45,7 +45,7 @@ def list_memories(user_id: str = "default", chat_id: str | None = None):
 
 
 @router.get("/relevant", response_model=MemoryListResponse)
-def list_relevant_memories(query: str, user_id: str = "default", chat_id: str | None = None):
+def list_relevant_memories(query: str, user_id: str = "default_user", chat_id: str | None = None):
     """List relevant memories for a query."""
     try:
         memories = get_relevant_memories(

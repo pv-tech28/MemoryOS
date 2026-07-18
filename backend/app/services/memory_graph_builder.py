@@ -35,6 +35,7 @@ class EntityNode(BaseModel):
     last_accessed: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    source_doc_ids: List[str] = Field(default_factory=list)
 
 
 class RelationshipEdge(BaseModel):
@@ -75,11 +76,10 @@ class GraphService:
 
     # Relationship types (semantic, per requirements)
     RELATIONSHIP_TYPES = [
-        "works_at", "mentions", "belongs_to", "assigned_to", "created_by",
-        "attends", "related_to", "depends_on", "references", "contains",
-        "emailed_by", "meeting_with", "has_deadline", "uploaded_by",
-        "uses", "implements", "studies", "is_attending", "is_about",
-        "is_part_of", "knows", "interests", "has_goal"
+        "USES", "WORKS_ON", "CREATED", "CREATED_BY", "PART_OF",
+        "BELONGS_TO", "RELATED_TO", "CONNECTED_TO", "MENTIONED_IN",
+        "ATTENDED", "GENERATED_FROM", "SYNCED_FROM", "OWNS",
+        "CONTAINS", "REFERENCES", "DERIVED_FROM"
     ]
 
     # Entity synonyms/aliases for merging
@@ -89,35 +89,166 @@ class GraphService:
     }
 
     def __init__(self):
-        """Initialize GraphService — load graph from PostgreSQL into NetworkX."""
+        """Initialize GraphService — load graph from PostgreSQL into NetworkX and add demo data if empty."""
         self._graph: nx.DiGraph = nx.DiGraph()
         self._load_from_db()
+
+    def _add_demo_data(self):
+        """Add demo data to show relationships in the graph."""
+        print("[GraphService] Adding demo data")
+        
+        # Create demo entities
+        user = EntityNode(
+            id="demo_user",
+            name="User",
+            type="Person",
+            description="Owner of this memory vault",
+            importance=1.0
+        )
+        
+        john = EntityNode(
+            id="demo_john",
+            name="John Doe",
+            type="Person",
+            description="Colleague at work",
+            importance=0.8
+        )
+        
+        acme = EntityNode(
+            id="demo_acme",
+            name="Acme Corporation",
+            type="Organization",
+            description="Company where we work",
+            importance=0.7
+        )
+        
+        project_x = EntityNode(
+            id="demo_project_x",
+            name="Project X",
+            type="Project",
+            description="Main project we're working on",
+            importance=0.9
+        )
+        
+        react = EntityNode(
+            id="demo_react",
+            name="React",
+            type="Technology",
+            description="Frontend framework used in Project X",
+            importance=0.8
+        )
+        
+        doc1 = EntityNode(
+            id="demo_doc1",
+            name="Project Requirements.pdf",
+            type="Document",
+            description="Requirements document for Project X",
+            importance=0.7
+        )
+        
+        # Add nodes to graph
+        self.create_node(user)
+        self.create_node(john)
+        self.create_node(acme)
+        self.create_node(project_x)
+        self.create_node(react)
+        self.create_node(doc1)
+        
+        # Add relationships
+        self.create_edge(RelationshipEdge(
+            source_id=user.id,
+            target_id=john.id,
+            type="RELATED_TO",
+            description="User knows John Doe",
+            strength=0.9
+        ))
+        
+        self.create_edge(RelationshipEdge(
+            source_id=john.id,
+            target_id=acme.id,
+            type="WORKS_ON",
+            description="John works at Acme Corporation",
+            strength=1.0
+        ))
+        
+        self.create_edge(RelationshipEdge(
+            source_id=user.id,
+            target_id=acme.id,
+            type="WORKS_ON",
+            description="User works at Acme Corporation",
+            strength=1.0
+        ))
+        
+        self.create_edge(RelationshipEdge(
+            source_id=project_x.id,
+            target_id=acme.id,
+            type="PART_OF",
+            description="Project X is part of Acme Corporation",
+            strength=0.9
+        ))
+        
+        self.create_edge(RelationshipEdge(
+            source_id=react.id,
+            target_id=project_x.id,
+            type="USES",
+            description="Project X uses React",
+            strength=0.8
+        ))
+        
+        self.create_edge(RelationshipEdge(
+            source_id=doc1.id,
+            target_id=project_x.id,
+            type="MENTIONED_IN",
+            description="Requirements document mentions Project X",
+            strength=0.7
+        ))
+        
+        self.create_edge(RelationshipEdge(
+            source_id=doc1.id,
+            target_id=user.id,
+            type="CREATED_BY",
+            description="Requirements document was created by user",
+            strength=0.6
+        ))
+        
+        self.create_edge(RelationshipEdge(
+            source_id=user.id,
+            target_id=project_x.id,
+            type="ATTENDED",
+            description="User attended Project X kickoff",
+            strength=0.5
+        ))
+
+        print("[GraphService] Demo data added successfully")
 
     # -------------------------------------------------------------------------
     # Graph Persistence (load from PostgreSQL, save to PostgreSQL)
     # -------------------------------------------------------------------------
 
     def _load_from_db(self) -> None:
-        """Load all nodes and edges from PostgreSQL into the NetworkX graph."""
+        """Load graph from PostgreSQL. Only seed demo data if DB is empty."""
         db = SessionLocal()
         try:
-            nodes = GraphRepository.get_all_nodes(db)
-            edges = GraphRepository.get_all_edges(db)
+            from app.models.db_models import GraphNodeModel, GraphEdgeModel
+            db_nodes = db.query(GraphNodeModel).all()
+            db_edges = db.query(GraphEdgeModel).all()
 
-            self._graph = nx.DiGraph()
+            if db_nodes:
+                print(f"[GraphService] Loading {len(db_nodes)} nodes and {len(db_edges)} edges from DB")
+                for node in db_nodes:
+                    node_data = GraphRepository.node_to_dict(node)
+                    self._graph.add_node(node.id, **node_data)
+                for edge in db_edges:
+                    edge_data = GraphRepository.edge_to_dict(edge)
+                    self._graph.add_edge(edge.source_id, edge.target_id, **edge_data)
+            else:
+                print("[GraphService] DB is empty, adding demo data")
+                self._add_demo_data()
 
-            for node in nodes:
-                node_data = GraphRepository.node_to_dict(node)
-                self._graph.add_node(node.id, **node_data)
-
-            for edge in edges:
-                edge_data = GraphRepository.edge_to_dict(edge)
-                self._graph.add_edge(edge.source_id, edge.target_id, **edge_data)
-
-            print(f"[GraphService] Loaded {len(nodes)} nodes, {len(edges)} edges from PostgreSQL")
         except Exception as e:
             print(f"[GraphService] Error loading from DB, starting fresh: {e}")
-            self._graph = nx.DiGraph()
+            self._graph.clear()
+            self._add_demo_data()
         finally:
             db.close()
 
@@ -384,7 +515,8 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         self,
         text: str,
         source_node: Optional[EntityNode] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        doc_id: Optional[str] = None
     ) -> List[str]:
         """
         Process a piece of text, extract entities/relationships, and add them to the graph.
@@ -395,6 +527,9 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
 
         entity_map: Dict[str, str] = {}
         for entity in result.entities:
+            # If we have a doc_id, add it to source_doc_ids
+            if doc_id and doc_id not in entity.source_doc_ids:
+                entity.source_doc_ids.append(doc_id)
             node_id = self.create_node(entity)
             entity_map[(entity.name.lower(), entity.type.lower())] = node_id
             node_ids.append(node_id)
@@ -413,6 +548,8 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
                 self.create_edge(edge)
 
         if source_node:
+            if doc_id and doc_id not in source_node.source_doc_ids:
+                source_node.source_doc_ids.append(doc_id)
             source_id = self.create_node(source_node)
             for node_id in node_ids:
                 self.create_edge(RelationshipEdge(
@@ -563,8 +700,58 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         except:
             return None
 
+    def get_community_detection(self) -> List[List[str]]:
+        """Detect communities using Louvain method (for undirected graph)."""
+        if len(self._graph.nodes()) < 2:
+            return []
+        try:
+            # Convert to undirected for community detection
+            undirected = self._graph.to_undirected()
+            # Use Louvain method if available, else connected components
+            import community as community_louvain
+            partition = community_louvain.best_partition(undirected)
+            communities = {}
+            for node_id, comm_id in partition.items():
+                if comm_id not in communities:
+                    communities[comm_id] = []
+                communities[comm_id].append(node_id)
+            return list(communities.values())
+        except ImportError:
+            # Fallback to connected components
+            return list(nx.connected_components(undirected))
+        except Exception as e:
+            print(f"[GraphService] Community detection error: {e}")
+            return []
+
+    def get_central_nodes(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Get most central nodes using betweenness centrality."""
+        if len(self._graph.nodes()) < 2:
+            return []
+        try:
+            undirected = self._graph.to_undirected()
+            betweenness = nx.betweenness_centrality(undirected)
+            sorted_nodes = sorted(betweenness.items(), key=lambda x: x[1], reverse=True)[:limit]
+            return [
+                {
+                    "id": node_id,
+                    "name": self._graph.nodes[node_id].get("name"),
+                    "type": self._graph.nodes[node_id].get("type"),
+                    "centrality": score
+                }
+                for node_id, score in sorted_nodes
+            ]
+        except Exception as e:
+            print(f"[GraphService] Centrality error: {e}")
+            return []
+
+    def clear_graph(self):
+        """Clear all nodes and edges from the in-memory graph (used when user deletes graph data)."""
+        self._graph.clear()
+        # Also clear from database if needed, but that's handled by the router
+        print("[GraphService] In-memory graph cleared")
+        
     def get_stats(self) -> Dict[str, Any]:
-        """Get statistics about the graph for frontend display."""
+        """Get comprehensive statistics about the graph for frontend display."""
         total_nodes = self._graph.number_of_nodes()
         total_edges = self._graph.number_of_edges()
 
@@ -603,13 +790,32 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         if total_nodes > 0:
             avg_connections = (total_edges * 2) / total_nodes
 
+        # Connected components
+        undirected = self._graph.to_undirected()
+        connected_components = list(nx.connected_components(undirected))
+        connected_components_count = len(connected_components)
+        largest_cluster_size = max(len(c) for c in connected_components) if connected_components_count > 0 else 0
+
+        # Central nodes
+        central_nodes = self.get_central_nodes()
+        
+        # Communities
+        communities = self.get_community_detection()
+
         return {
             "total_nodes": total_nodes,
             "total_edges": total_edges,
+            "connected_components": connected_components_count,
+            "largest_cluster": {
+                "size": largest_cluster_size,
+                "node_ids": list(connected_components[0]) if connected_components_count > 0 else []
+            },
+            "avg_connections": avg_connections,
             "node_counts": node_counts,
             "most_connected": most_connected,
+            "central_nodes": central_nodes,
             "newest_node": newest_node,
-            "avg_connections": avg_connections
+            "communities": communities
         }
 
 
