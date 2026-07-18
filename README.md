@@ -4,7 +4,7 @@
 
 ## Project Status
 
-EVOLVE AI is now a working full-stack Memory OS with a FastAPI backend, a Next.js frontend, Supabase-backed relational storage, local semantic retrieval, Google source syncing, and an interactive knowledge graph UI.
+EVOLVE AI is now a working full-stack Memory OS with a FastAPI backend, a Next.js frontend, Supabase-backed auth and relational storage, local semantic retrieval, Google source syncing, and an interactive knowledge graph UI.
 
 This README reflects the current implementation state of the repository: what is already done, how the system works, and what remains before production readiness.
 
@@ -13,6 +13,9 @@ This README reflects the current implementation state of the repository: what is
 ### Core product flows
 
 - Ask page is implemented for chat-based retrieval and answer generation.
+- Supabase authentication flow is implemented with login, signup, forgot-password, reset-password, and Google OAuth entry points.
+- Protected app routing redirects unauthenticated users to login and sends authenticated users into the dashboard.
+- Dashboard/home experience has been split out from the public root route.
 - Files flow supports uploads and document ingestion.
 - Memory Graph page renders an interactive graph with search, filters, minimap, force layout, and related-memory exploration.
 - Timeline page shows chronological activity and memory-related events.
@@ -22,6 +25,8 @@ This README reflects the current implementation state of the repository: what is
 ### Backend architecture
 
 - FastAPI application is wired through modular routers for chat, documents, memory graph, auth, sources, memories, timeline, dashboard, and settings.
+- Authenticated backend routes verify Supabase bearer tokens and resolve the local `User` record with `get_current_user`.
+- Main product routes now pass `current_user.id` into document, chat, graph, memory, timeline, dashboard, source, and settings operations.
 - SQLAlchemy models and repositories are used for structured persistence instead of keeping everything in flat local files.
 - Supabase PostgreSQL is the primary database target, with SQLite fallback for local development when `DATABASE_URL` is not provided.
 - Database initialization runs automatically on backend startup.
@@ -51,7 +56,9 @@ This README reflects the current implementation state of the repository: what is
 
 ### Stability fixes already completed
 
-- Repository user IDs were standardized to `default_user` to fix source-sync/session consistency issues.
+- Supabase Auth has been wired into the frontend session provider, middleware, API client headers, and backend route dependencies.
+- Local users are created or refreshed from Supabase JWTs, including profile metadata such as email, name, username, and avatar.
+- Legacy repository defaults remain for compatibility, while primary request paths now pass authenticated user IDs explicitly.
 - Heavy optional dependencies in the documents router were made lazy/optional so the backend can start even if OCR or Whisper-related packages are missing.
 - Supabase environment handling was stabilized for the current setup.
 - The project has been run locally and the major pages were verified to load.
@@ -81,7 +88,17 @@ The backend is a FastAPI app that exposes REST endpoints for each product area:
 - dashboard,
 - settings.
 
-### 3. Storage model
+### 3. Auth flow
+
+Supabase Auth owns identity and session issuance:
+
+1. the frontend signs users in or up through Supabase,
+2. the active Supabase session provides an access token,
+3. the API client attaches that token as a bearer token,
+4. FastAPI verifies the token with Supabase,
+5. the backend creates or refreshes the local `User` row and scopes requests to that user.
+
+### 4. Storage model
 
 The system currently uses:
 
@@ -90,7 +107,7 @@ The system currently uses:
 - local vector storage for retrieval,
 - graph entities and relationships managed through the graph service layer.
 
-### 4. Ingestion pipeline
+### 5. Ingestion pipeline
 
 When a file is uploaded or a source is synced:
 
@@ -101,7 +118,7 @@ When a file is uploaded or a source is synced:
 5. graph entities and relationships are created,
 6. timeline events and related records are updated.
 
-### 5. Retrieval flow
+### 6. Retrieval flow
 
 When the user asks a question:
 
@@ -118,6 +135,7 @@ When the user asks a question:
 | UI | Tailwind CSS, Framer Motion, React Flow |
 | Backend | FastAPI, SQLAlchemy |
 | Database | Supabase PostgreSQL, SQLite fallback |
+| Auth | Supabase Auth, bearer-token protected FastAPI routes |
 | Retrieval | Local embeddings and vector retrieval |
 | AI providers | OpenRouter, Gemini-compatible flows |
 | Integrations | Gmail, Google Drive, Google Calendar |
@@ -166,6 +184,8 @@ If port 3000 is already occupied, Next.js may automatically move to `3001` or an
 At minimum, configure these in `backend/.env`:
 
 ```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SECRET_KEY=your_supabase_service_or_secret_key
 LLM_PROVIDER=openrouter
 OPENROUTER_API_KEY=your_key_here
 OPENROUTER_MODEL=deepseek/deepseek-chat-v3-0324
@@ -177,12 +197,15 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 ```
 
+The frontend Supabase publishable key is currently configured in `frontend/src/lib/supabase.ts` and `frontend/middleware.ts`. For deployment, move those values into environment variables before building.
+
 ## What Remains
 
 ### High priority
 
-- Multi-user authentication and proper per-user session isolation.
-- Replace hardcoded `default_user` behavior with real account-scoped data ownership.
+- Complete cleanup of legacy `default_user` compatibility paths in lower-level repositories and RAG helpers.
+- Verify every ingestion, retrieval, deletion, and source-sync path with multiple real Supabase users.
+- Persist and refresh Google credentials per authenticated user end to end.
 - Implement a real backend-powered daily summary flow instead of static/mock behavior.
 - Add stronger automated test coverage for core backend flows and source-sync regressions.
 - Harden error handling and retries around third-party sync operations.
@@ -197,7 +220,7 @@ GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 
 ### Scale and production readiness
 
-- Production auth and authorization model.
+- Production authorization review, including route-level ownership checks and Supabase key handling.
 - Background workers/queues for long-running ingestion.
 - Dockerized local and production deployment setup.
 - CI/CD and deployment automation.
@@ -206,11 +229,12 @@ GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 
 ## Suggested Next Build Order
 
-1. Implement real auth and remove the single hardcoded user assumption.
-2. Ship the daily summary backend flow.
-3. Add background job/progress infrastructure for uploads and source sync.
-4. Add targeted backend and integration tests.
-5. Containerize and prepare deployment.
+1. Remove remaining legacy `default_user` fallbacks and audit account isolation.
+2. Persist Google OAuth credentials per Supabase user and verify Gmail, Drive, and Calendar sync after login.
+3. Ship the daily summary backend flow.
+4. Add background job/progress infrastructure for uploads and source sync.
+5. Add targeted backend and integration tests.
+6. Containerize and prepare deployment.
 
 ## Product Vision
 
