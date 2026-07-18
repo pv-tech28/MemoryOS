@@ -4,7 +4,7 @@ Memories Router
 Handles long-term memory endpoints.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.models.schemas import (
     Memory, MemoryListResponse,
     GraphNode, GraphEdge, GraphData, RelatedMemoriesResponse
@@ -21,21 +21,26 @@ from app.services.memory_graph_builder import (
     get_related_memories,
     get_graph_stats
 )
+from app.dependencies import get_current_user
+from app.models.db_models import User
 
 router = APIRouter(prefix="/api/memories", tags=["memories"])
 
 
 @router.get("", response_model=MemoryListResponse)
-def list_memories(user_id: str = "default_user", chat_id: str | None = None):
+def list_memories(
+    current_user: User = Depends(get_current_user),
+    chat_id: str | None = None
+):
     """List all memories."""
     try:
         if chat_id:
-            memories = get_memories_by_chat_id(chat_id, min_importance=0.0)
+            memories = get_memories_by_chat_id(chat_id, min_importance=0.0, user_id=current_user.id)
         else:
             memories = get_relevant_memories(
                 "",
                 chat_id=None,
-                user_id=user_id,
+                user_id=current_user.id,
                 limit=100,
                 min_importance=0.0
             )
@@ -45,13 +50,17 @@ def list_memories(user_id: str = "default_user", chat_id: str | None = None):
 
 
 @router.get("/relevant", response_model=MemoryListResponse)
-def list_relevant_memories(query: str, user_id: str = "default_user", chat_id: str | None = None):
+def list_relevant_memories(
+    query: str,
+    current_user: User = Depends(get_current_user),
+    chat_id: str | None = None
+):
     """List relevant memories for a query."""
     try:
         memories = get_relevant_memories(
             query_text=query,
             chat_id=chat_id,
-            user_id=user_id,
+            user_id=current_user.id,
             limit=10,
             min_importance=0.3
         )

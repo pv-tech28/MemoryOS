@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useState, useRef } from "react";
 import {
   Home,
   MessageCircle,
@@ -15,39 +15,47 @@ import {
   Settings,
   ChevronDown,
   Brain,
+  LogOut,
+  User,
+  CreditCard,
 } from "lucide-react";
-import { getProfile, Profile } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/dashboard", label: "Home", icon: Home },
   { href: "/ask", label: "Ask EVOLVE", icon: MessageCircle },
   { href: "/sources", label: "Sources", icon: Database },
   { href: "/memory-graph", label: "Memory Graph", icon: Share2 },
   { href: "/timeline", label: "Timeline", icon: Clock },
   { href: "/files", label: "Files", icon: FolderOpen },
-  { href: "/daily-summary", label: "Daily Summary", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { user, logout } = useAuth();
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const data = await getProfile();
-        setProfile(data);
-      } catch (err) {
-        console.error("Failed to load profile:", err);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        return;
       }
+      setShowMenu(false);
     };
-    loadProfile();
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const getInitials = (name: string | null) => {
     if (!name) return "U";
     return name.charAt(0).toUpperCase();
+  };
+
+  const handleLogout = async () => {
+    setShowMenu(false);
+    await logout();
   };
 
   return (
@@ -119,17 +127,18 @@ export default function Sidebar() {
       </div>
 
       {/* User Profile */}
-      <Link href="/settings/profile">
+      <div className="relative mx-3 mb-4" ref={menuRef}>
         <div
-          className="mx-3 mb-4 p-3 rounded-xl flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => setShowMenu(!showMenu)}
+          className="p-3 rounded-xl flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
           style={{
             background: "var(--bg-card)",
             border: "1px solid var(--border)",
           }}
         >
-          {profile?.profile_picture_url ? (
+          {user?.user_metadata?.avatar_url ? (
             <img
-              src={`http://localhost:8000${profile.profile_picture_url}`}
+              src={user.user_metadata.avatar_url}
               alt="Profile"
               className="w-9 h-9 rounded-full object-cover"
             />
@@ -140,12 +149,12 @@ export default function Sidebar() {
                 background: "linear-gradient(135deg, #6c5ce7, #e84393)",
               }}
             >
-              {getInitials(profile?.display_name)}
+              {getInitials(user?.user_metadata?.full_name || user?.email)}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">
-              {profile?.display_name || "User"}
+              {user?.user_metadata?.full_name || user?.email?.split('@')[0] || "User"}
             </p>
             <p
               className="text-[11px] font-medium"
@@ -154,9 +163,51 @@ export default function Sidebar() {
               Free Plan
             </p>
           </div>
-          <ChevronDown size={14} style={{ color: "var(--text-muted)" }} />
+          <ChevronDown
+            size={14}
+            style={{ color: "var(--text-muted)" }}
+            className={showMenu ? "rotate-180" : ""}
+          />
         </div>
-      </Link>
+        {/* Dropdown Menu */}
+        <AnimatePresence>
+          {showMenu && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute bottom-full left-0 right-0 mb-2 p-1 rounded-xl border shadow-lg"
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.3)"
+              }}
+            >
+              <Link href="/settings" onClick={() => setShowMenu(false)}>
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer hover:opacity-90"
+                     style={{color: "var(--text-secondary)"}}>
+                  <User size={16} />
+                  <span>Profile</span>
+                </div>
+              </Link>
+              <Link href="/settings" onClick={() => setShowMenu(false)}>
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer hover:opacity-90"
+                     style={{color: "var(--text-secondary)"}}>
+                  <CreditCard size={16} />
+                  <span>Billing</span>
+                </div>
+              </Link>
+              <div className="h-px mx-2 my-1" style={{ background: "var(--border)" }} />
+              <div onClick={handleLogout}>
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer hover:opacity-90 text-red-400">
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </aside>
   );
 }

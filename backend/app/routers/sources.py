@@ -8,7 +8,7 @@ import json
 import base64
 import traceback
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
@@ -23,14 +23,15 @@ from ..services.memory_graph_builder import (
 )
 from app.database import SessionLocal
 from app.repositories.document_repo import DocumentRepository
+from app.dependencies import get_current_user
+from app.models.db_models import User
 
 load_dotenv()
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
 
-def get_google_credentials() -> Credentials:
-    user_id = "default_user"
+def get_google_credentials(user_id: str) -> Credentials:
     if user_id not in user_credentials:
         raise HTTPException(status_code=401, detail="Not authenticated with Google")
     creds = user_credentials[user_id]
@@ -103,10 +104,12 @@ def get_google_credentials() -> Credentials:
 
 
 @router.post("/gmail/sync")
-async def sync_gmail():
+async def sync_gmail(
+    current_user: User = Depends(get_current_user)
+):
     """Sync emails from Gmail to our vector DB and knowledge graph."""
     try:
-        creds = get_google_credentials()
+        creds = get_google_credentials(current_user.id)
         service = build("gmail", "v1", credentials=creds)
         results = service.users().messages().list(userId="me", maxResults=10).execute()
         messages = results.get("messages", [])
@@ -170,7 +173,7 @@ async def sync_gmail():
                     file_size=len(content.encode("utf-8")),
                     status="ready",
                     metadata={},
-                    user_id="default_user",
+                    user_id=current_user.id,
                 )
                 db_chunks = [
                     {
@@ -206,7 +209,8 @@ async def sync_gmail():
             graph_service.process_text(
                 text=content,
                 source_node=email_node,
-                context={"type": "email", "source": "gmail", "msg_id": msg["id"]}
+                context={"type": "email", "source": "gmail", "msg_id": msg["id"], "user_id": current_user.id},
+                user_id=current_user.id
             )
         
         return {"status": "success", "message": f"Synced {len(messages)} emails from Gmail"}
@@ -217,10 +221,12 @@ async def sync_gmail():
 
 
 @router.post("/drive/sync")
-async def sync_drive():
+async def sync_drive(
+    current_user: User = Depends(get_current_user)
+):
     """Sync documents from Google Drive to our vector DB and knowledge graph."""
     try:
-        creds = get_google_credentials()
+        creds = get_google_credentials(current_user.id)
         service = build("drive", "v3", credentials=creds)
         results = service.files().list(pageSize=10, fields="files(id, name, mimeType, createdTime, size)").execute()
         files = results.get("files", [])
@@ -267,7 +273,7 @@ async def sync_drive():
                         file_size=int(file.get("size", len(file_content))),
                         status="ready",
                         metadata={},
-                        user_id="default_user",
+                        user_id=current_user.id,
                     )
                     db_chunks = [
                         {
@@ -301,7 +307,8 @@ async def sync_drive():
                 graph_service.process_text(
                     text=text,
                     source_node=doc_node,
-                    context={"type": "document", "source": "drive", "drive_id": file["id"]}
+                    context={"type": "document", "source": "drive", "drive_id": file["id"], "user_id": current_user.id},
+                    user_id=current_user.id
                 )
         
         return {"status": "success", "message": f"Synced {len(files)} files from Drive"}
@@ -312,10 +319,12 @@ async def sync_drive():
 
 
 @router.post("/calendar/sync")
-async def sync_calendar():
+async def sync_calendar(
+    current_user: User = Depends(get_current_user)
+):
     """Sync events from Google Calendar to our vector DB and knowledge graph."""
     try:
-        creds = get_google_credentials()
+        creds = get_google_credentials(current_user.id)
         service = build("calendar", "v3", credentials=creds)
         now = datetime.utcnow().isoformat() + "Z"
         events_result = service.events().list(
@@ -361,7 +370,7 @@ async def sync_calendar():
                     file_size=len(content.encode("utf-8")),
                     status="ready",
                     metadata={},
-                    user_id="default_user",
+                    user_id=current_user.id,
                 )
                 db_chunks = [
                     {
@@ -399,7 +408,8 @@ async def sync_calendar():
             graph_service.process_text(
                 text=content,
                 source_node=event_node,
-                context={"type": "event", "source": "calendar", "event_id": event["id"]}
+                context={"type": "event", "source": "calendar", "event_id": event["id"], "user_id": current_user.id},
+                user_id=current_user.id
             )
         
         return {"status": "success", "message": f"Synced {len(events)} events from Calendar"}

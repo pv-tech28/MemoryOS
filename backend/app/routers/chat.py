@@ -5,7 +5,7 @@ Handles the RAG-based chat with documents and memory extraction.
 import os
 from dotenv import load_dotenv
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.models.schemas import ChatRequest, ChatResponse, SourceReference, RelatedEntity
 from app.services.timeline_service import add_timeline_event
 from app.services.rag_engine import query as rag_query
@@ -17,6 +17,8 @@ from app.services.conversation_memory import (
     delete_chat
 )
 from app.services.memory_extractor import extract_memories
+from app.dependencies import get_current_user
+from app.models.db_models import User
 
 load_dotenv()
 MEMORY_EXTRACTION_ENABLED = os.getenv("MEMORY_EXTRACTION_ENABLED", "true").lower() == "true"
@@ -25,7 +27,10 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.post("", response_model=ChatResponse)
-async def chat_with_document(request: ChatRequest):
+async def chat_with_document(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user)
+):
     """
     Ask a question about your uploaded documents.
     Uses the RAG pipeline with conversation history and memory extraction.
@@ -37,7 +42,7 @@ async def chat_with_document(request: ChatRequest):
         # Get or create chat ID
         chat_id = request.chat_id
         if not chat_id:
-            chat_id = create_chat(document_id=request.document_id)
+            chat_id = create_chat(document_id=request.document_id, user_id=current_user.id)
 
         # Retrieve conversation history
         chat_history = get_chat_history(chat_id)
@@ -81,7 +86,7 @@ async def chat_with_document(request: ChatRequest):
                 full_history = get_chat_history(chat_id)
                 # Only extract memories every 3 messages or if it's the first message
                 if len(full_history) % 3 == 0 or len(full_history) == 1:
-                    extract_memories(chat_id, full_history)
+                    extract_memories(chat_id, full_history, user_id=current_user.id)
             except Exception as extract_error:
                 print(f"[Memory Extractor] Error extracting memories: {extract_error}")
 
@@ -97,7 +102,8 @@ async def chat_with_document(request: ChatRequest):
         add_timeline_event(
             title=f"Ask EVOLVE: {request.question[:50]}{'...' if len(request.question) > 50 else ''}",
             description=f"AI answered your question in {result['processing_time']:.2f}s.",
-            event_type="chat"
+            event_type="chat",
+            user_id=current_user.id
         )
 
         return ChatResponse(

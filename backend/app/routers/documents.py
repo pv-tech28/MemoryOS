@@ -19,6 +19,8 @@ from app.services.vector_store import add_document, delete_document as vs_delete
 from app.services.memory_graph_builder import get_graph_service, EntityNode
 from app.services.timeline_service import add_timeline_event
 from dotenv import load_dotenv
+from app.dependencies import get_current_user
+from app.models.db_models import User
 
 # New imports for additional file types (optional)
 try:
@@ -95,7 +97,11 @@ def parse_audio(file_path: str) -> tuple[str, dict]:
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_document(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Upload a PDF, DOCX, TXT, image (JPG/JPEG/PNG/WEBP), or audio (MP3/WAV/M4A) file,
     parse it, generate embeddings, store in vector DB, and extract entities to knowledge graph.
@@ -185,7 +191,7 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
             file_size=len(content),
             status="ready",
             metadata=metadata,
-            user_id="default_user",
+            user_id=current_user.id,
         )
         
         # Save chunks to PostgreSQL document_chunks table
@@ -207,7 +213,7 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
             file_path=file_path,
             file_size=len(content),
             mime_type=file.content_type,
-            user_id="default_user",
+            user_id=current_user.id,
         )
         
         # Add to knowledge graph with enhanced document node
@@ -277,9 +283,12 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
 
 
 @router.get("", response_model=DocumentListResponse)
-async def list_documents(db: Session = Depends(get_db)):
+async def list_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """List all uploaded documents."""
-    docs = DocumentRepository.list_all(db, user_id="default_user")
+    docs = DocumentRepository.list_all(db, user_id=current_user.id)
     documents = [
         DocumentResponse(**DocumentRepository.to_dict(doc))
         for doc in docs

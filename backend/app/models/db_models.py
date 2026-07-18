@@ -25,6 +25,14 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String, primary_key=True, default=generate_uuid)
+    auth_id = Column(String, unique=True, nullable=False, index=True)  # Supabase auth.user.id
+    full_name = Column(String, nullable=True)
+    username = Column(String, unique=True, nullable=True, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    avatar_url = Column(String, nullable=True)
+    plan = Column(String, default="free", nullable=False)
+    memory_health = Column(Float, default=100.0, nullable=False)
+    last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

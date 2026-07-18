@@ -4,12 +4,15 @@ Dashboard Router — for Home page stats and data
 import os
 import json
 from datetime import datetime, timedelta
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 from app.services.memory_store import get_all_memories
 from app.services.timeline_service import get_timeline_events
 from app.services.memory_graph_builder import get_graph_service
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.repositories.document_repo import DocumentRepository
+from app.dependencies import get_current_user
+from app.models.db_models import User
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -82,20 +85,20 @@ def get_upcoming_events_label(all_metadata):
 
 
 @router.get("/stats")
-async def get_dashboard_stats():
+async def get_dashboard_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Get all dashboard stats for Home page
     """
     # Load metadata for documents, emails, calendar from PostgreSQL
-    db = SessionLocal()
     all_metadata = []
     try:
-        docs = DocumentRepository.list_all(db, user_id="default_user")
+        docs = DocumentRepository.list_all(db, user_id=current_user.id)
         all_metadata = [DocumentRepository.to_dict(d) for d in docs]
     except Exception as e:
         print(f"Error loading metadata from DB: {e}")
-    finally:
-        db.close()
 
     # Count documents, emails, calendar
     total_documents = 0
@@ -210,17 +213,19 @@ async def get_dashboard_stats():
 
 
 @router.get("/daily-summary")
-async def get_daily_summary():
+async def get_daily_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Get daily summary stats, highlights, and AI insights for the Daily Summary page
     """
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
-    db = SessionLocal()
     
     try:
         # --- 1. Load all documents ---
-        docs = DocumentRepository.list_all(db, user_id="default_user")
+        docs = DocumentRepository.list_all(db, user_id=current_user.id)
         doc_dicts = [DocumentRepository.to_dict(d) for d in docs]
         
         # --- Stats ---
@@ -248,7 +253,7 @@ async def get_daily_summary():
         ]
         
         # Sources Active
-        source_counts = DocumentRepository.count_by_source(db, user_id="default_user")
+        source_counts = DocumentRepository.count_by_source(db, user_id=current_user.id)
         active_sources_count = sum(
             1 for src, count in source_counts.items() if count > 0
         ) + (1 if source_counts.get("document", 0) > 0 else 0)  # count uploaded docs as source

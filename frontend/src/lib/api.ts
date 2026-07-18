@@ -2,8 +2,21 @@
  * EVOLVE AI — API Client
  * Functions for communicating with the FastAPI backend.
  */
+import { supabase } from "@/lib/supabase";
 
 const API_BASE = "http://localhost:8000/api";
+
+// Helper to get auth headers
+async function getAuthHeaders() {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (token) {
+    return {
+      "Authorization": `Bearer ${token}`,
+    };
+  }
+  return {};
+}
 
 /* ─── Types ─── */
 
@@ -61,6 +74,7 @@ export async function uploadDocument(
 ): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  const headers = await getAuthHeaders();
 
   // Use XMLHttpRequest for progress tracking
   return new Promise((resolve, reject) => {
@@ -83,6 +97,10 @@ export async function uploadDocument(
 
     xhr.addEventListener("error", () => reject(new Error("Network error")));
     xhr.open("POST", `${API_BASE}/documents/upload`);
+    // Set headers
+    Object.entries(headers).forEach(([key, value]) => {
+      xhr.setRequestHeader(key, value);
+    });
     xhr.send(formData);
   });
 }
@@ -91,20 +109,24 @@ export async function getDocuments(): Promise<{
   documents: DocumentInfo[];
   total: number;
 }> {
-  const res = await fetch(`${API_BASE}/documents`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/documents`, { headers });
   if (!res.ok) throw new Error("Failed to fetch documents");
   return res.json();
 }
 
 export async function getDocument(docId: string): Promise<DocumentInfo> {
-  const res = await fetch(`${API_BASE}/documents/${docId}`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/documents/${docId}`, { headers });
   if (!res.ok) throw new Error("Document not found");
   return res.json();
 }
 
 export async function deleteDocument(docId: string): Promise<void> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/documents/${docId}`, {
     method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete document");
 }
@@ -116,9 +138,13 @@ export async function chatWithDocument(
   chatId?: string,
   documentId?: string
 ): Promise<ChatResponse> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
     body: JSON.stringify({
       question,
       chat_id: chatId || null,
@@ -201,13 +227,15 @@ export interface MemoryGraphData {
 }
 
 export async function getMemoryGraph(): Promise<MemoryGraphData> {
-  const res = await fetch(`${API_BASE}/memory-graph`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/memory-graph`, { headers });
   if (!res.ok) throw new Error("Failed to fetch memory graph");
   return res.json();
 }
 
 export async function getRelatedMemories(entityName: string): Promise<RelatedMemoriesResponse> {
-  const res = await fetch(`${API_BASE}/memories/related/${encodeURIComponent(entityName)}`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/memories/related/${encodeURIComponent(entityName)}`, { headers });
   if (!res.ok) throw new Error("Failed to get related memories");
   return res.json();
 }
@@ -219,7 +247,8 @@ export async function loginWithGoogle(): Promise<void> {
 }
 
 export async function checkAuthStatus(): Promise<{ authenticated: boolean }> {
-  const res = await fetch(`${API_BASE}/auth/status`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/auth/status`, { headers });
   if (!res.ok) throw new Error("Failed to check auth status");
   return res.json();
 }
@@ -227,19 +256,22 @@ export async function checkAuthStatus(): Promise<{ authenticated: boolean }> {
 /* ─── Sources Sync ─── */
 
 export async function syncGmail(): Promise<{ status: string; message: string }> {
-  const res = await fetch(`${API_BASE}/sources/gmail/sync`, { method: "POST" });
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/sources/gmail/sync`, { method: "POST", headers });
   if (!res.ok) throw new Error("Failed to sync Gmail");
   return res.json();
 }
 
 export async function syncDrive(): Promise<{ status: string; message: string }> {
-  const res = await fetch(`${API_BASE}/sources/drive/sync`, { method: "POST" });
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/sources/drive/sync`, { method: "POST", headers });
   if (!res.ok) throw new Error("Failed to sync Drive");
   return res.json();
 }
 
 export async function syncCalendar(): Promise<{ status: string; message: string }> {
-  const res = await fetch(`${API_BASE}/sources/calendar/sync`, { method: "POST" });
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/sources/calendar/sync`, { method: "POST", headers });
   if (!res.ok) throw new Error("Failed to sync Calendar");
   return res.json();
 }
@@ -263,28 +295,32 @@ export interface MemoryListResponse {
 }
 
 export async function getMemories(chatId?: string): Promise<MemoryListResponse> {
+  const headers = await getAuthHeaders();
   let url = `${API_BASE}/memories`;
   if (chatId) {
     url += `?chat_id=${chatId}`;
   }
-  const res = await fetch(url);
+  const res = await fetch(url, { headers });
   if (!res.ok) throw new Error("Failed to fetch memories");
   return res.json();
 }
 
 export async function getRelevantMemories(query: string, chatId?: string): Promise<MemoryListResponse> {
+  const headers = await getAuthHeaders();
   let url = `${API_BASE}/memories/relevant?query=${encodeURIComponent(query)}`;
   if (chatId) {
     url += `&chat_id=${chatId}`;
   }
-  const res = await fetch(url);
+  const res = await fetch(url, { headers });
   if (!res.ok) throw new Error("Failed to fetch relevant memories");
   return res.json();
 }
 
 export async function deleteMemory(memoryId: string): Promise<void> {
+  const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/memories/${memoryId}`, {
         method: "DELETE",
+        headers,
     });
     if (!res.ok) throw new Error("Failed to delete memory");
 }
@@ -311,7 +347,8 @@ export interface GraphStats {
 }
 
 export async function getGraphStats(): Promise<GraphStats> {
-    const res = await fetch(`${API_BASE}/memories/stats`);
+  const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE}/memories/stats`, { headers });
     if (!res.ok) throw new Error("Failed to get graph stats");
     return res.json();
 }
@@ -336,14 +373,17 @@ export interface TimelineResponse {
 }
 
 export async function getTimeline(limit: number = 100): Promise<TimelineResponse> {
-  const res = await fetch(`${API_BASE}/timeline?limit=${limit}`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/timeline?limit=${limit}`, { headers });
   if (!res.ok) throw new Error("Failed to fetch timeline");
   return res.json();
 }
 
 export async function deleteTimelineEvent(eventId: string): Promise<void> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/timeline/${eventId}`, {
     method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete timeline event");
 }
@@ -370,7 +410,8 @@ export interface DashboardStats {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const res = await fetch(`${API_BASE}/dashboard/stats`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/dashboard/stats`, { headers });
   if (!res.ok) throw new Error("Failed to fetch dashboard stats");
   return res.json();
 }
@@ -399,7 +440,8 @@ export interface DailySummaryResponse {
 }
 
 export async function getDailySummary(): Promise<DailySummaryResponse> {
-  const res = await fetch(`${API_BASE}/dashboard/daily-summary`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/dashboard/daily-summary`, { headers });
   if (!res.ok) throw new Error("Failed to fetch daily summary");
   return res.json();
 }
@@ -462,7 +504,8 @@ export interface StorageStats {
 }
 
 export async function getProfile(): Promise<Profile> {
-  const res = await fetch(`${API_BASE}/settings/profile`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/settings/profile`, { headers });
   if (!res.ok) throw new Error("Failed to get profile");
   return res.json();
 }
@@ -472,9 +515,13 @@ export async function updateProfile(data: Partial<{
   username: string;
   bio: string;
 }>): Promise<Profile> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/profile`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
     body: JSON.stringify(data)
   });
   if (!res.ok) throw new Error("Failed to update profile");
@@ -482,26 +529,33 @@ export async function updateProfile(data: Partial<{
 }
 
 export async function uploadProfilePicture(file: File): Promise<{ profile_picture_url: string }> {
+  const headers = await getAuthHeaders();
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(`${API_BASE}/settings/profile/picture`, {
     method: "POST",
     body: formData,
+    headers,
   });
   if (!res.ok) throw new Error("Failed to upload profile picture");
   return res.json();
 }
 
 export async function getEmailSettings(): Promise<{ email: string; email_verified: boolean }> {
-  const res = await fetch(`${API_BASE}/settings/email`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/settings/email`, { headers });
   if (!res.ok) throw new Error("Failed to get email settings");
   return res.json();
 }
 
 export async function updateEmail(newEmail: string): Promise<{ email: string; email_verified: boolean }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/email`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
     body: JSON.stringify({ new_email: newEmail })
   });
   if (!res.ok) throw new Error("Failed to update email");
@@ -509,17 +563,23 @@ export async function updateEmail(newEmail: string): Promise<{ email: string; em
 }
 
 export async function sendVerificationEmail(): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/email/send-verification`, {
-    method: "POST"
+    method: "POST",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to send verification email");
   return res.json();
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/password/change`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
     body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
   });
   if (!res.ok) throw new Error("Failed to change password");
@@ -527,9 +587,13 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 export async function updateTwoFactor(enabled: boolean): Promise<{ two_factor_enabled: boolean }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/security/two-factor`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
     body: JSON.stringify({ enabled })
   });
   if (!res.ok) throw new Error("Failed to update two-factor settings");
@@ -537,12 +601,14 @@ export async function updateTwoFactor(enabled: boolean): Promise<{ two_factor_en
 }
 
 export async function getAllSettings(): Promise<UserSettings> {
-  const res = await fetch(`${API_BASE}/settings/all`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/settings/all`, { headers });
   if (!res.ok) throw new Error("Failed to get all settings");
   return res.json();
 }
 
 export async function updateAllSettings(data: Partial<UserSettings>): Promise<UserSettings> {
+  const headers = await getAuthHeaders();
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(data)) {
     if (value !== undefined) {
@@ -551,92 +617,113 @@ export async function updateAllSettings(data: Partial<UserSettings>): Promise<Us
   }
   
   const res = await fetch(`${API_BASE}/settings/all?${params.toString()}`, {
-    method: "PUT"
+    method: "PUT",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to update settings");
   return res.json();
 }
 
 export async function getConnectedSources(): Promise<ConnectedSources> {
-  const res = await fetch(`${API_BASE}/settings/connected-sources`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/settings/connected-sources`, { headers });
   if (!res.ok) throw new Error("Failed to get connected sources");
   return res.json();
 }
 
 export async function syncSource(source: string): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/connected-sources/${source}/sync`, {
-    method: "POST"
+    method: "POST",
+    headers,
   });
   if (!res.ok) throw new Error(`Failed to sync ${source}`);
   return res.json();
 }
 
 export async function disconnectSource(source: string): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/connected-sources/${source}`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error(`Failed to disconnect ${source}`);
   return res.json();
 }
 
 export async function deleteDocuments(): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/data/documents`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete documents");
   return res.json();
 }
 
 export async function deleteMemoryGraph(): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/data/memory-graph`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete memory graph");
   return res.json();
 }
 
 export async function deleteConversations(): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/data/conversations`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete conversations");
   return res.json();
 }
 
 export async function deleteGmailData(): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/data/gmail`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete Gmail data");
   return res.json();
 }
 
 export async function deleteDriveData(): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/data/drive`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete Drive data");
   return res.json();
 }
 
 export async function deleteCalendarData(): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/data/calendar`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete Calendar data");
   return res.json();
 }
 
 export async function deleteAllData(): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/settings/data/all`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error("Failed to delete all data");
   return res.json();
 }
 
 export async function getStorageStats(): Promise<StorageStats> {
-  const res = await fetch(`${API_BASE}/settings/storage/stats`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/settings/storage/stats`, { headers });
   if (!res.ok) throw new Error("Failed to get storage stats");
   return res.json();
 }
