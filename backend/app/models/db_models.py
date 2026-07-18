@@ -25,13 +25,6 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    email = Column(String, nullable=True, unique=True)
-    display_name = Column(String, nullable=True)
-    username = Column(String, nullable=True, unique=True)
-    bio = Column(Text, nullable=True)
-    profile_picture_url = Column(String, nullable=True)
-    email_verified = Column(Boolean, default=False)
-    password_hash = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -42,55 +35,6 @@ class User(Base):
     timeline_events = relationship("TimelineEventModel", back_populates="user", cascade="all, delete-orphan")
     google_credentials = relationship("GoogleCredential", back_populates="user", cascade="all, delete-orphan")
     uploads = relationship("Upload", back_populates="user", cascade="all, delete-orphan")
-    settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
-
-
-class UserSettings(Base):
-    __tablename__ = "user_settings"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True, unique=True)
-    
-    # Appearance
-    theme = Column(String, default="dark")  # dark, light, system
-    
-    # Notifications
-    push_notifications = Column(Boolean, default=True)
-    email_notifications = Column(Boolean, default=True)
-    daily_summary_notifications = Column(Boolean, default=True)
-    memory_update_notifications = Column(Boolean, default=True)
-    sync_completion_notifications = Column(Boolean, default=True)
-    ai_activity_notifications = Column(Boolean, default=True)
-    
-    # Sound effects
-    sound_enabled = Column(Boolean, default=False)
-    
-    # Language
-    language = Column(String, default="en")
-    
-    # Privacy
-    data_sharing_enabled = Column(Boolean, default=False)
-    ai_training_consent = Column(Boolean, default=False)
-    store_chat_history = Column(Boolean, default=True)
-    memory_retention_period = Column(String, default="forever")  # forever, 1_year, 6_months, 3_months
-    
-    # Memory preferences
-    auto_memory_extraction = Column(Boolean, default=True)
-    auto_graph_building = Column(Boolean, default=True)
-    auto_daily_summary = Column(Boolean, default=True)
-    auto_source_sync = Column(Boolean, default=True)
-    auto_ai_insights = Column(Boolean, default=True)
-    
-    # AI settings
-    ai_provider = Column(String, default="openrouter")  # openrouter, deepseek, gemini
-    response_length = Column(String, default="medium")  # short, medium, detailed
-    creativity_level = Column(String, default="medium")  # low, medium, high
-    
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
-    # Relationship
-    user = relationship("User", back_populates="settings")
 
 
 
