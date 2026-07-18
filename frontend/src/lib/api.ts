@@ -149,40 +149,35 @@ export async function checkHealth(): Promise<boolean> {
 
 export interface GraphNode {
   id: string;
-  label: string;
-  category: string;
-  color: string;
-  radius: number;
-  description?: string;
+  label?: string;
+  category?: string;
+  color?: string;
+  radius?: number;
+  name?: string;
+  type?: string;
+  description?: string | null;
   date?: string;
   owner?: string;
-  type?: string;
   connections?: string[];
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-  label: string;
-}
-
-export interface GraphNode {
-  id: string;
-  name: string;
-  type: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   [key: string]: any;
 }
 
 export interface GraphEdge {
-  id: string;
-  source_node_id: string;
-  target_node_id: string;
-  type: string;
-  description: string | null;
-  created_at: string;
+  id?: string;
+  source: string;
+  target: string;
+  label: string;
+  relationship?: string;
+  confidence?: number;
+  animated?: boolean;
+  markerEnd?: any;
+  source_node_id?: string;
+  target_node_id?: string;
+  type?: string;
+  description?: string | null;
+  created_at?: string;
   source_name?: string;
   target_name?: string;
   [key: string]: any;

@@ -19,6 +19,7 @@ import {
   MiniMap,
   ReactFlowProvider,
   NodeMouseHandler,
+  getSmoothStepPath,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
@@ -66,13 +67,111 @@ import {
   chatWithDocument,
 } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  forceSimulation,
-  forceLink,
-  forceManyBody,
-  forceCenter,
-  forceCollide,
-} from "d3-force";
+import dagre from "dagre";
+import { EdgeProps, EdgeLabelRenderer } from "reactflow";
+
+// --- Custom Edge Component ---
+function CustomConnectionEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  data,
+}: EdgeProps) {
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+    borderRadius: 16,
+  });
+
+  const confidence = data?.confidence ?? 1.0;
+  const label = data?.label ?? "";
+
+  // Opacity based on confidence:
+  // confidence > 0.9: solid (1.0)
+  // confidence 0.7: slightly transparent (0.65)
+  // confidence < 0.5: very transparent (0.3)
+  let confidenceOpacity = 1.0;
+  if (confidence > 0.9) {
+    confidenceOpacity = 1.0;
+  } else if (confidence >= 0.7) {
+    confidenceOpacity = 0.65;
+  } else {
+    confidenceOpacity = 0.3;
+  }
+
+  // Fade out if not highlighted/selected in parent logic
+  const parentOpacity = style.opacity !== undefined ? Number(style.opacity) : 1.0;
+  const finalOpacity = parentOpacity < 1.0 ? parentOpacity : confidenceOpacity;
+
+  return (
+    <>
+      <path
+        id={id}
+        style={{
+          ...style,
+          stroke: "#A855F7",
+          strokeWidth: 2,
+          strokeDasharray: "5 5",
+          opacity: finalOpacity,
+        }}
+        className="react-flow__edge-path"
+        d={edgePath}
+        markerEnd={markerEnd}
+      />
+      {label && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              background: "rgba(15, 23, 42, 0.95)",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              border: "1px solid rgba(168, 85, 247, 0.4)",
+              fontSize: "10px",
+              fontWeight: 600,
+              color: "#C084FC",
+              pointerEvents: "none",
+              opacity: finalOpacity,
+              whiteSpace: "nowrap",
+              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)",
+            }}
+            className="nodrag nopan"
+          >
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const edgeTypes = {
+  relationship: CustomConnectionEdge,
+};
+
+const FILTER_CATEGORIES = [
+  "Person",
+  "Project",
+  "Document",
+  "Email",
+  "Technology",
+  "Company",
+  "Skill",
+  "Meeting",
+  "Memory",
+];
+
 
 // --- Configuration: Node Types & Colors ---
 // Updated to match user's requirements
@@ -121,7 +220,8 @@ const NODE_ICONS: Record<string, any> = {
 };
 
 // --- Custom Node Component ---
-function CustomNode({ data, selected, isHighlighted }: { data: any; selected: boolean; isHighlighted: boolean }) {
+function CustomNode({ data, selected }: { data: any; selected: boolean }) {
+  const isHighlighted = data.isHighlighted;
   const Icon = NODE_ICONS[data.type] || Sparkles;
   const color = NODE_COLORS[data.type] || "#6B7280";
   const importance = data.importance || 0.5;
@@ -176,6 +276,41 @@ const nodeTypes = {
   custom: CustomNode,
 };
 
+const performDagreLayout = (apiNodes: any[], apiEdges: any[]) => {
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: 'TB', nodesep: 80, edgesep: 50, ranksep: 100 });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  apiNodes.forEach((node) => {
+    g.setNode(node.id, { width: 180, height: 60 });
+  });
+
+  apiEdges.forEach((edge) => {
+    g.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(g);
+
+  return apiNodes.map((node) => {
+    const nodeWithPosition = g.node(node.id);
+    return {
+      id: node.id,
+      type: "custom",
+      position: {
+        x: nodeWithPosition ? nodeWithPosition.x - 90 : 200 + Math.random() * 400,
+        y: nodeWithPosition ? nodeWithPosition.y - 30 : 200 + Math.random() * 400,
+      },
+      data: {
+        label: node.label,
+        type: node.type || node.category,
+        description: node.description || "",
+        date: node.date || "",
+        importance: node.importance || 0.5,
+      },
+    };
+  });
+};
+
 // --- Main Component ---
 function MemoryGraphContent() {
   // --- State ---
@@ -183,26 +318,10 @@ function MemoryGraphContent() {
   const [apiEdges, setApiEdges] = useState<any[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [graphStats, setGraphStats] = useState<GraphStats | null>(null);
-  const [nodes, setNodes, onNodesChangeInternal] = useNodesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
 
-  // Custom onNodesChange to detect drag events and stop simulation
-  const onNodesChange = useCallback(
-    (changes: any) => {
-      // Check if any node is being dragged
-      const isDragging = changes.some(
-        (c: any) =>
-          c.type === "position" && (c.dragging || c.dragging === undefined)
-      );
-      if (isDragging && !isDraggingRef.current) {
-        isDraggingRef.current = true;
-        simulationRef.current?.stop();
-      }
-      onNodesChangeInternal(changes);
-    },
-    [onNodesChangeInternal]
-  );
   const [selectedNode, setSelectedNode] = useState<any | null>(null);
   const [selectedRelatedMemories, setSelectedRelatedMemories] =
     useState<any | null>(null);
@@ -210,13 +329,8 @@ function MemoryGraphContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   
-  // Refs for force simulation
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
-  const simulationRef = useRef<any>(null);
-  const tickingRef = useRef(false);
-  const ticksRunRef = useRef(0);
-  const isDraggingRef = useRef(false);
 
   // --- Fetch Data ---
   const fetchData = useCallback(async () => {
@@ -232,43 +346,25 @@ function MemoryGraphContent() {
       setMemories(memoriesData.memories);
       setGraphStats(statsData);
 
-      const initialNodes: Node[] = graphData.nodes.map((node: any, idx: number) => ({
-            id: node.id,
-            type: "custom",
-            position: {
-                x: 200 + Math.random() * 400,
-                y: 200 + Math.random() * 400,
-            },
-            data: { 
-                label: node.label, 
-                type: node.type,
-                description: node.description,
-                date: node.date,
-                importance: node.importance || 0.5,
-            },
-        }));
+      // Perform Dagre layout
+      const initialNodes = performDagreLayout(graphData.nodes, graphData.edges);
 
-        const initialEdges: Edge[] = graphData.edges.map((edge: any, idx: number) => ({
-            id: `edge-${idx}`,
-            source: edge.source,
-            target: edge.target,
-            type: "smoothstep",
-            animated: true,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                color: "#A855F7",
-            },
-            label: edge.label,
-            labelStyle: {
-                fill: "#94a3b8",
-                fontSize: "10px",
-                fontWeight: 500,
-            },
-            style: { 
-                stroke: "#6C5CE7", 
-                strokeWidth: (edge.strength || 1) * 3,
-            },
-        }));
+      const initialEdges: Edge[] = graphData.edges.map((edge: any, idx: number) => ({
+        id: edge.id || `edge-${idx}`,
+        source: edge.source,
+        target: edge.target,
+        type: "relationship", // Use the custom animated relationship edge
+        animated: edge.animated !== false,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#A855F7",
+        },
+        data: {
+          label: edge.label || edge.relationship,
+          confidence: edge.confidence ?? edge.strength ?? 1.0,
+          animated: edge.animated !== false,
+        },
+      }));
 
       setNodes(initialNodes);
       setEdges(initialEdges);
@@ -280,73 +376,21 @@ function MemoryGraphContent() {
     }
   }, [setNodes, setEdges]);
 
-  // --- Force Simulation ---
-  useEffect(() => {
-    if (!initialDataLoaded || !nodes.length) return;
-
-    ticksRunRef.current = 0;
-    isDraggingRef.current = false;
-
-    // Create force simulation - prepare nodes for d3-force (add x,y,vx,vy if needed)
-    const simNodes = nodes.map((node) => ({
-      ...node,
-      x: node.position.x,
-      y: node.position.y,
-      vx: 0,
-      vy: 0,
-    }));
-
-    simulationRef.current = forceSimulation(simNodes)
-      .force(
-        "link",
-        forceLink(edges as any)
-          .id((d: any) => d.id)
-          .distance(120)
-          .strength(0.5)
-      )
-      .force("charge", forceManyBody().strength(-400))
-      .force("center", forceCenter(600, 400)) // Fixed center coordinates
-      .force("collide", forceCollide().radius(60))
-      .on("tick", () => {
-        if (!tickingRef.current && !isDraggingRef.current) {
-          window.requestAnimationFrame(() => {
-            if (ticksRunRef.current >= 300 || isDraggingRef.current) {
-              simulationRef.current?.stop();
-              return;
-            }
-            setNodes((nds) =>
-              nds.map((node) => {
-                const simNode = (simulationRef.current.nodes() as any[]).find(
-                  (n: any) => n.id === node.id
-                );
-                if (!simNode) return node;
-                return {
-                  ...node,
-                  position: {
-                    x: simNode.x,
-                    y: simNode.y,
-                  },
-                };
-              })
-            );
-            ticksRunRef.current++;
-            tickingRef.current = false;
-          });
-          tickingRef.current = true;
-        }
-      });
-
-    return () => {
-      if (simulationRef.current) {
-        simulationRef.current.stop();
-      }
-    };
-  }, [initialDataLoaded, setNodes]);
-
   // --- Effects ---
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Center camera when search query matches a node
+  useEffect(() => {
+    if (searchQuery && reactFlowInstance && nodes.length > 0) {
+      const q = searchQuery.toLowerCase().trim();
+      const match = nodes.find((n) => n.data.label.toLowerCase().includes(q));
+      if (match) {
+        reactFlowInstance.fitView({ nodes: [match], duration: 800, padding: 0.3 });
+      }
+    }
+  }, [searchQuery, reactFlowInstance, nodes]);
 
   // --- Handlers ---
   const onConnect = useCallback(
@@ -355,8 +399,14 @@ function MemoryGraphContent() {
         addEdge(
           {
             ...params,
+            type: "relationship",
             animated: true,
             markerEnd: { type: MarkerType.ArrowClosed, color: "#A855F7" },
+            data: {
+              label: "CONNECTED_TO",
+              confidence: 1.0,
+              animated: true,
+            }
           },
           eds
         )
@@ -399,69 +449,17 @@ function MemoryGraphContent() {
   };
 
   const askEvolve = async (label: string) => {
-    // This will navigate to ask page, but for now just open chat with prefilled query
     window.location.href = `/ask?q=${encodeURIComponent(`Tell me more about ${label}`)}`;
   };
 
   const resetLayout = () => {
-    setNodes((prevNodes) =>
-      prevNodes.map((node, idx) => ({
-        ...node,
-        position: {
-          x: 200 + Math.random() * 400,
-          y: 200 + Math.random() * 400,
-        },
-      }))
-    );
-    // Restart simulation
-    isDraggingRef.current = false;
-    ticksRunRef.current = 0;
-    const simNodes = nodes.map((node) => ({
-      ...node,
-      x: node.position.x,
-      y: node.position.y,
-      vx: 0,
-      vy: 0,
-    }));
-    simulationRef.current = forceSimulation(simNodes)
-      .force(
-        "link",
-        forceLink(edges as any)
-          .id((d: any) => d.id)
-          .distance(120)
-          .strength(0.5)
-      )
-      .force("charge", forceManyBody().strength(-400))
-      .force("center", forceCenter(600, 400))
-      .force("collide", forceCollide().radius(60))
-      .on("tick", () => {
-        if (!tickingRef.current && !isDraggingRef.current) {
-          window.requestAnimationFrame(() => {
-            if (ticksRunRef.current >= 300 || isDraggingRef.current) {
-              simulationRef.current?.stop();
-              return;
-            }
-            setNodes((nds) =>
-              nds.map((node) => {
-                const simNode = (simulationRef.current.nodes() as any[]).find(
-                  (n: any) => n.id === node.id
-                );
-                if (!simNode) return node;
-                return {
-                  ...node,
-                  position: {
-                    x: simNode.x,
-                    y: simNode.y,
-                  },
-                };
-              })
-            );
-            ticksRunRef.current++;
-            tickingRef.current = false;
-          });
-          tickingRef.current = true;
-        }
-      });
+    if (apiNodes.length > 0) {
+      const layoutedNodes = performDagreLayout(apiNodes, apiEdges);
+      setNodes(layoutedNodes);
+      if (reactFlowInstance) {
+        reactFlowInstance.fitView({ padding: 0.2, duration: 800 });
+      }
+    }
   };
 
   const fitScreen = () => {
@@ -478,90 +476,109 @@ function MemoryGraphContent() {
 
   const exportPNG = () => {
     if (reactFlowInstance) {
-      // Simple export (real implementation would be more complex)
       alert("Export PNG functionality coming soon!");
     }
   };
 
-  // --- Derived State ---
+  // --- Derived State with memoized filter & selection highlighting ---
   const { filteredNodes, filteredEdges } = useMemo(() => {
-    // If no filters, return all
-    if (!searchQuery && activeFilters.length === 0 && !selectedNode) {
-      return { 
-        filteredNodes: nodes.map((n) => ({
-          ...n,
-          data: { ...n.data, isHighlighted: false }
-        })), 
-        filteredEdges: edges 
-      };
+    // 1. Filter nodes based on selected filters
+    const visibleNodesList = nodes.filter((node) => {
+      if (activeFilters.length > 0) {
+        const type = node.data?.type;
+        return activeFilters.includes(type);
+      }
+      return true;
+    });
+
+    const visibleNodeIds = new Set(visibleNodesList.map((n) => n.id));
+
+    // 2. Determine selection/search highlight target
+    const highlightedNodeIds = new Set<string>();
+    let activeTargetId: string | null = null;
+    
+    if (selectedNode) {
+      activeTargetId = selectedNode.id;
+    } else if (searchQuery) {
+      const q = searchQuery.toLowerCase().trim();
+      const match = visibleNodesList.find((n) => n.data.label.toLowerCase().includes(q));
+      if (match) {
+        activeTargetId = match.id;
+      }
     }
 
-    // First find which nodes to keep/highlight
-    const keptNodeIds = new Set<string>();
-    const highlightedNodeIds = new Set<string>();
-    const filteredApiNodes = apiNodes.filter((node) => {
-      let matches = true;
-      if (searchQuery) {
-        matches = node.label.toLowerCase().includes(searchQuery.toLowerCase());
-      }
-      if (matches && activeFilters.length > 0) {
-        matches = activeFilters.includes(node.type);
-      }
-      return matches;
-    });
-    filteredApiNodes.forEach((n) => {
-      keptNodeIds.add(n.id);
-      highlightedNodeIds.add(n.id);
-    });
-
-    // Add selected node and neighbors
-    if (selectedNode) {
-      keptNodeIds.add(selectedNode.id);
-      highlightedNodeIds.add(selectedNode.id);
-      apiEdges.forEach((e) => {
-        if (e.source === selectedNode.id) {
-          keptNodeIds.add(e.target);
-          highlightedNodeIds.add(e.target);
+    if (activeTargetId && visibleNodeIds.has(activeTargetId)) {
+      highlightedNodeIds.add(activeTargetId);
+      
+      // Highlight neighbors that are also currently visible
+      edges.forEach((edge) => {
+        if (edge.source === activeTargetId && visibleNodeIds.has(edge.target)) {
+          highlightedNodeIds.add(edge.target);
         }
-        if (e.target === selectedNode.id) {
-          keptNodeIds.add(e.source);
-          highlightedNodeIds.add(e.source);
+        if (edge.target === activeTargetId && visibleNodeIds.has(edge.source)) {
+          highlightedNodeIds.add(edge.source);
         }
       });
     }
 
-    // Now filter nodes and edges
-    const filteredNodes = nodes.map((node) => ({
-      ...node,
-      data: { 
-        ...node.data, 
-        isHighlighted: highlightedNodeIds.has(node.id)
-      },
-      style: {
-        ...node.style,
-        opacity: keptNodeIds.has(node.id) ? 1 : 0.15,
-      },
-    }));
+    const hasHighlightActive = highlightedNodeIds.size > 0;
 
-    const filteredEdges = edges.map((edge) => ({
-      ...edge,
-      style: {
-        ...edge.style,
-        opacity:
-          keptNodeIds.has(edge.source) && keptNodeIds.has(edge.target)
-            ? 1
-            : 0.1,
-      },
-    }));
+    // 3. Style visible nodes based on highlight state
+    const finalNodes = visibleNodesList.map((node) => {
+      const isHighlighted = highlightedNodeIds.has(node.id);
+      const isSelected = selectedNode && selectedNode.id === node.id;
+      
+      let opacity = 1.0;
+      if (hasHighlightActive) {
+        opacity = (isHighlighted || isSelected) ? 1.0 : 0.15;
+      }
 
-    return { filteredNodes, filteredEdges };
-  }, [nodes, edges, apiNodes, apiEdges, searchQuery, activeFilters, selectedNode]);
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          isHighlighted: isHighlighted || isSelected,
+        },
+        style: {
+          ...node.style,
+          opacity,
+        },
+      };
+    });
+
+    // 4. Filter edges and style based on highlight state
+    const finalEdges = edges
+      .filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+      .map((edge) => {
+        let isHighlightedEdge = false;
+        if (activeTargetId) {
+          isHighlightedEdge = edge.source === activeTargetId || edge.target === activeTargetId;
+        }
+
+        let opacity = 1.0;
+        if (hasHighlightActive) {
+          opacity = isHighlightedEdge ? 1.0 : 0.1;
+        }
+
+        return {
+          ...edge,
+          animated: hasHighlightActive ? isHighlightedEdge : edge.animated,
+          style: {
+            ...edge.style,
+            opacity,
+          },
+        };
+      });
+
+    return { filteredNodes: finalNodes, filteredEdges: finalEdges };
+  }, [nodes, edges, searchQuery, activeFilters, selectedNode]);
 
   const toggleFilter = (type: string) => {
     setActiveFilters((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
   };
+
 
   return (
     <AppLayout>
@@ -651,6 +668,7 @@ function MemoryGraphContent() {
               onConnect={onConnect}
               onNodeClick={onNodeClick}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               fitView
               className="bg-[#020617]"
               minZoom={0.2}
@@ -733,7 +751,7 @@ function MemoryGraphContent() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {Object.keys(NODE_COLORS).map((type) => (
+                {FILTER_CATEGORIES.map((type) => (
                   <button
                     key={type}
                     onClick={() => toggleFilter(type)}
@@ -842,6 +860,26 @@ function MemoryGraphContent() {
                       Open Source
                     </button>
                     <button
+                      onClick={() => {
+                        if (selectedNode) {
+                          // Fit view to selected node and its neighbors
+                          const relatedIds = new Set([selectedNode.id]);
+                          apiEdges.forEach((e) => {
+                            if (e.source === selectedNode.id) {
+                              relatedIds.add(e.target);
+                            }
+                            if (e.target === selectedNode.id) {
+                              relatedIds.add(e.source);
+                            }
+                          });
+                          const nodeIdsArray = Array.from(relatedIds);
+                          reactFlowInstance?.fitView({
+                            nodes: nodeIdsArray.map((id) => ({ id })),
+                            padding: 0.2,
+                            duration: 800,
+                          });
+                        }
+                      }}
                       className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-medium text-white hover:bg-slate-700 transition-all"
                     >
                       <Brain size={12} />
