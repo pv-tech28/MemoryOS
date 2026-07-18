@@ -36,10 +36,12 @@ This README reflects the current implementation state of the repository: what is
 
 ### Graph system
 
-- The graph backend exposes nodes, edges, entity search, entity detail, and subgraph endpoints.
-- The graph frontend uses React Flow with a force-directed layout and rich node rendering.
-- Documents, emails, events, technologies, people, skills, projects, and custom entities are represented visually.
-- Graph stats and related-node exploration are supported in the frontend.
+- **Semantic Edge Relationships:** The graph backend has been upgraded to expose real semantic relationships with custom edge models containing `relationship`, `confidence`, and `animated` properties directly from PostgreSQL's `graph_edges` table.
+- **Auto-Layout Engine:** Replaced D3 force-directed physics with a stable hierarchical layout powered by [dagre](https://github.com/dagrejs/dagre). This ensures clean, deterministic placements and avoids overlapping edges or erratic movement.
+- **Custom Animated Edge Render:** Custom animated purple dashed edges (`#A855F7`) render relationship labels centered as floating text (avoiding default white boxes) with opacity dynamically driven by edge `confidence` (solid for > 0.9, semi-transparent for 0.7-0.9, very transparent for < 0.5).
+- **Selection & Search Highlighting:** Selecting any node highlights connected edges/neighbors and fades out unrelated elements. Searching a node centers the camera on it and highlights its paths.
+- **Category Filters:** Sidebar filters strictly toggle matching categories (`Person`, `Project`, `Document`, `Email`, `Technology`, `Company`, `Skill`, `Meeting`, `Memory`), hiding unrelated nodes entirely from the canvas.
+- **Metadata Integration:** Supporting document, email, meeting, and custom nodes are represented visually with full detail exploration in the sidebar.
 
 ### Source integrations
 
