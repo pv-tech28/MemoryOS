@@ -22,6 +22,7 @@ def add_timeline_event(
     related_document: Optional[str] = None,
     related_memory: Optional[str] = None,
     related_graph_node: Optional[str] = None,
+    user_id: str = "default_user",
 ) -> TimelineEvent:
     """
     Add a new event to the timeline.
@@ -38,6 +39,7 @@ def add_timeline_event(
             related_document=related_document,
             related_memory=related_memory,
             related_graph_node=related_graph_node,
+            user_id=user_id
         )
         db.commit()
         return TimelineEvent(**event_dict)
@@ -48,14 +50,14 @@ def add_timeline_event(
         db.close()
 
 
-def get_timeline_events(limit: int = 100) -> Dict[str, List[TimelineEvent]]:
+def get_timeline_events(limit: int = 100, user_id: str = "default_user") -> Dict[str, List[TimelineEvent]]:
     """
     Get timeline events, grouped by date and sorted newest first.
     Returns { "16 Jul 2026": [TimelineEvent, …], … }
     """
     db = _get_db()
     try:
-        grouped = TimelineRepository.get_events(db, limit)
+        grouped = TimelineRepository.get_events(db, limit, user_id)
         # Convert dicts to TimelineEvent models
         result = {}
         for date_str, events in grouped.items():
@@ -65,7 +67,7 @@ def get_timeline_events(limit: int = 100) -> Dict[str, List[TimelineEvent]]:
         db.close()
 
 
-def delete_timeline_event(event_id: str) -> bool:
+def delete_timeline_event(event_id: str, user_id: str = "default_user") -> bool:
     """Delete a timeline event by ID."""
     db = _get_db()
     try:

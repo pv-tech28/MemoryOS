@@ -35,12 +35,12 @@ def list_memories(
     """List all memories."""
     try:
         if chat_id:
-            memories = get_memories_by_chat_id(chat_id, min_importance=0.0, user_id=current_user.id)
+            memories = get_memories_by_chat_id(chat_id, min_importance=0.0, user_id="default_user")
         else:
             memories = get_relevant_memories(
                 "",
                 chat_id=None,
-                user_id=current_user.id,
+                user_id="default_user",
                 limit=100,
                 min_importance=0.0
             )
@@ -60,7 +60,7 @@ def list_relevant_memories(
         memories = get_relevant_memories(
             query_text=query,
             chat_id=chat_id,
-            user_id=current_user.id,
+            user_id="default_user",
             limit=10,
             min_importance=0.3
         )
@@ -70,10 +70,10 @@ def list_relevant_memories(
 
 
 @router.delete("/{memory_id}")
-def remove_memory(memory_id: str):
+def remove_memory(memory_id: str, current_user: User = Depends(get_current_user)):
     """Delete a memory."""
     try:
-        success = delete_memory(memory_id)
+        success = delete_memory(memory_id, user_id="default_user")
         if not success:
             raise HTTPException(status_code=404, detail="Memory not found")
         return {"success": True}
@@ -82,21 +82,21 @@ def remove_memory(memory_id: str):
 
 
 @router.get("/graph", response_model=GraphData)
-def get_graph():
+def get_graph(current_user: User = Depends(get_current_user)):
     """Get all graph nodes and edges."""
     try:
-        nodes = [GraphNode(**n) for n in get_all_graph_nodes()]
-        edges = [GraphEdge(**e) for e in get_all_graph_edges()]
+        nodes = [GraphNode(**n) for n in get_all_graph_nodes(user_id="default_user")]
+        edges = [GraphEdge(**e) for e in get_all_graph_edges(user_id="default_user")]
         return GraphData(nodes=nodes, edges=edges)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/related/{entity_name}", response_model=RelatedMemoriesResponse)
-def get_related_entity_memories(entity_name: str):
+def get_related_entity_memories(entity_name: str, current_user: User = Depends(get_current_user)):
     """Get related memories for an entity."""
     try:
-        result = get_related_memories(entity_name)
+        result = get_related_memories(entity_name, user_id="default_user")
         return RelatedMemoriesResponse(
             node=GraphNode(**result["node"]) if result["node"] else None,
             edges=result["edges"],
@@ -108,10 +108,10 @@ def get_related_entity_memories(entity_name: str):
 
 
 @router.get("/stats")
-def get_stats():
+def get_stats(current_user: User = Depends(get_current_user)):
     """Get graph statistics."""
     try:
-        return get_graph_stats()
+        return get_graph_stats(user_id="default_user")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

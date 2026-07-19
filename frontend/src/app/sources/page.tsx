@@ -18,17 +18,17 @@ import {
 import { 
   getDocuments, 
   deleteDocument, 
-  loginWithGoogle, 
-  checkAuthStatus, 
   syncGmail, 
   syncDrive, 
   syncCalendar 
 } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 interface Document {
   id: string;
   filename: string;
-  upload_date: string;
+  uploaded_at?: string;
+  upload_date?: string;
   page_count: number;
   chunk_count: number;
 }
@@ -100,18 +100,15 @@ const fadeUp = {
 export default function SourcesPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const { user, signInWithGoogle } = useAuth();
 
   useEffect(() => {
     async function fetchData() {
       try {
         const docs = await getDocuments();
         setDocuments(docs.documents || []);
-        
-        const authStatus = await checkAuthStatus();
-        setIsAuthenticated(authStatus.authenticated);
       } catch (error) {
         console.error("Failed to fetch data:", error);
       } finally {
@@ -131,8 +128,19 @@ export default function SourcesPage() {
   };
 
   const handleSync = async (sourceName: string, syncFn: () => Promise<any>) => {
-    if (!isAuthenticated) {
-      await loginWithGoogle();
+    if (!user) {
+      setSyncing(sourceName);
+      try {
+        console.log("[Sources] Connecting Google sources...");
+        // signInWithOAuth redirects the page, so we don't need to wait for it to resolve
+        signInWithGoogle(window.location.href).catch((err: any) => {
+          console.error("[Sources] Failed to connect:", err);
+          setSyncing(null);
+        });
+      } catch (err: any) {
+        console.error("[Sources] Failed to connect:", err);
+        setSyncing(null);
+      }
       return;
     }
     
@@ -189,7 +197,7 @@ export default function SourcesPage() {
                   >
                     <Icon size={22} style={{ color: source.color }} />
                   </div>
-                  {isAuthenticated && (
+                  {user && (
                     <span className="badge-connected">Connected</span>
                   )}
                 </div>
@@ -203,7 +211,7 @@ export default function SourcesPage() {
                   disabled={syncing === source.name}
                   className="w-full mt-4 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-[1.02]"
                   style={
-                    isAuthenticated
+                    user
                       ? {
                           background: "var(--accent)",
                           color: "#fff",
@@ -218,7 +226,7 @@ export default function SourcesPage() {
                 >
                   {syncing === source.name 
                     ? "Syncing..." 
-                    : isAuthenticated 
+                    : user 
                       ? "Sync" 
                       : "Connect Google"
                   }

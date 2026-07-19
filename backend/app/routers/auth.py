@@ -59,6 +59,11 @@ user_credentials = DatabaseUserCredentialsDict()
 @router.post("/signup")
 async def signup(data: SignupRequest, db: Session = Depends(get_db)):
     """Sign up a new user with email and password."""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
+        )
     try:
         # Create user in Supabase Auth
         auth_response = supabase.auth.sign_up({
@@ -112,6 +117,11 @@ async def signup(data: SignupRequest, db: Session = Depends(get_db)):
 @router.post("/login")
 async def login(data: LoginRequest):
     """Login user with email and password."""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
+        )
     try:
         auth_response = supabase.auth.sign_in_with_password({
             "email": data.email,
@@ -133,6 +143,14 @@ async def login(data: LoginRequest):
             detail="Invalid credentials"
         )
 
+@router.get("/status")
+async def get_auth_status():
+    """Check authentication status (for frontend use)."""
+    # For now, return that authentication is handled by Supabase client-side
+    # In the future, we could verify the session with Supabase
+    return {"authenticated": False}
+
+
 @router.get("/me")
 async def get_me(current_user: User = Depends(get_current_user)):
     """Get current authenticated user details."""
@@ -151,6 +169,11 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
     """Send password reset email."""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
+        )
     try:
         supabase.auth.reset_password_email(data.email, {
             "redirect_to": "http://localhost:3000/reset-password"
@@ -166,6 +189,11 @@ async def forgot_password(data: ForgotPasswordRequest):
 @router.post("/reset-password")
 async def reset_password(data: ResetPasswordRequest, request: Request):
     """Reset password using token from email."""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
+        )
     try:
         # Get token from header
         auth_header = request.headers.get("Authorization")
@@ -191,6 +219,11 @@ async def reset_password(data: ResetPasswordRequest, request: Request):
 @router.post("/logout")
 async def logout():
     """Logout user (client-side only, invalidates session in Supabase)."""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
+        )
     try:
         supabase.auth.sign_out()
         return { "message": "Logged out" }
@@ -201,7 +234,14 @@ async def logout():
 @router.get("/google/login")
 async def google_login():
     """Redirect to Google OAuth login URL."""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
+        )
     try:
+        print(f"[Auth] Starting Google OAuth flow, provider: google")
+        print(f"[Auth] Redirect URL: http://localhost:3000/dashboard")
         auth_response = supabase.auth.sign_in_with_oauth({
             "provider": "google",
             "options": {
@@ -209,11 +249,14 @@ async def google_login():
                 "scopes": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/calendar.readonly"
             }
         })
+        print(f"[Auth] Supabase auth response: {auth_response}")
         if auth_response.url:
             return RedirectResponse(url=auth_response.url)
         raise HTTPException(status_code=500, detail="Failed to get auth URL")
     except Exception as e:
-        print(f"[Auth] Google login error: {str(e)}")
+        print(f"[Auth] Google login error (type: {type(e).__name__}): {str(e)}")
+        import traceback
+        print(f"[Auth] Stack trace: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

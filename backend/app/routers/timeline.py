@@ -18,7 +18,7 @@ async def get_timeline(
     current_user: User = Depends(get_current_user)
 ):
     """Get timeline events grouped by date, newest first."""
-    grouped = get_timeline_events(limit=limit, user_id=current_user.id)
+    grouped = get_timeline_events(limit=limit, user_id="default_user")
     return {"events_by_date": grouped}
 
 
@@ -28,7 +28,7 @@ async def delete_timeline(
     current_user: User = Depends(get_current_user)
 ):
     """Delete a timeline event by ID."""
-    success = delete_timeline_event(event_id, user_id=current_user.id)
+    success = delete_timeline_event(event_id, user_id="default_user")
     if not success:
         raise HTTPException(status_code=404, detail="Event not found")
     return {"success": True}

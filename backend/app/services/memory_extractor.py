@@ -54,7 +54,7 @@ Now analyze this conversation and extract memories:
 def extract_memories(
     chat_id: str,
     conversation_history: List[Dict[str, Any]],
-    user_id: str = "default",
+    user_id: str = "default_user",
     importance_threshold: float = 0.4
 ) -> List[str]:
     """

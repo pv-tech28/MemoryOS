@@ -95,7 +95,7 @@ async def get_dashboard_stats(
     # Load metadata for documents, emails, calendar from PostgreSQL
     all_metadata = []
     try:
-        docs = DocumentRepository.list_all(db, user_id=current_user.id)
+        docs = DocumentRepository.list_all(db, user_id="default_user")
         all_metadata = [DocumentRepository.to_dict(d) for d in docs]
     except Exception as e:
         print(f"Error loading metadata from DB: {e}")
@@ -116,22 +116,17 @@ async def get_dashboard_stats(
     # Get total memories
     memories = []
     try:
-        memories = get_all_memories()
+        memories = get_all_memories(user_id="default_user")
     except Exception as e:
         print(f"Error loading memories: {e}")
     total_memories = len(memories)
 
     # Get graph stats
     graph_service = get_graph_service()
-    total_nodes = len(graph_service._graph.nodes)
-    total_edges = len(graph_service._graph.edges)
-    # Calculate clusters (simple: connected components)
-    clusters = 0
-    try:
-        import networkx as nx
-        clusters = nx.number_connected_components(graph_service._graph)
-    except Exception:
-        pass
+    graph_stats = graph_service.get_stats(user_id="default_user")
+    total_nodes = graph_stats.get("total_nodes", 0)
+    total_edges = graph_stats.get("total_edges", 0)
+    clusters = graph_stats.get("connected_components", 0)
 
     # Get today's memories
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -145,7 +140,7 @@ async def get_dashboard_stats(
             pass
 
     # Get timeline stats
-    timeline_data = get_timeline_events(limit=50)
+    timeline_data = get_timeline_events(limit=50, user_id="default_user")
     total_timeline_events = 0
     for events in timeline_data.values():
         total_timeline_events += len(events)
@@ -225,7 +220,7 @@ async def get_daily_summary(
     
     try:
         # --- 1. Load all documents ---
-        docs = DocumentRepository.list_all(db, user_id=current_user.id)
+        docs = DocumentRepository.list_all(db, user_id="default_user")
         doc_dicts = [DocumentRepository.to_dict(d) for d in docs]
         
         # --- Stats ---
@@ -253,14 +248,14 @@ async def get_daily_summary(
         ]
         
         # Sources Active
-        source_counts = DocumentRepository.count_by_source(db, user_id=current_user.id)
+        source_counts = DocumentRepository.count_by_source(db, user_id="default_user")
         active_sources_count = sum(
             1 for src, count in source_counts.items() if count > 0
         ) + (1 if source_counts.get("document", 0) > 0 else 0)  # count uploaded docs as source
         
         # Connections Made Today from graph
         graph_service = get_graph_service()
-        all_edges = graph_service.get_all_edges()
+        all_edges = graph_service.get_all_edges(user_id="default_user")
         new_connections_today = 0
         for edge in all_edges:
             try:
@@ -307,7 +302,7 @@ async def get_daily_summary(
         
         # --- AI Insights ---
         insights = []
-        all_nodes = graph_service.get_all_nodes()
+        all_nodes = graph_service.get_all_nodes(user_id="default_user")
         
         if all_nodes:
             # Most referenced topic/entity

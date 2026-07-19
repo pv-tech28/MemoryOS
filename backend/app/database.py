@@ -4,11 +4,12 @@ Uses SQLAlchemy 2.0 with PostgreSQL (Supabase).
 """
 
 import os
-from sqlalchemy import create_engine
+from pathlib import Path
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv()  # Load environment variables from .env file
 
 
 def get_database_url() -> str:
@@ -28,7 +29,9 @@ def get_database_url() -> str:
             url = urlparse.urlunparse(parsed)
         return url
     # Fallback: local SQLite (for development without Supabase)
-    return "sqlite:///./memory_db.sqlite"
+    # Resolve the path relative to this file (app/database.py) to avoid CWD issues!
+    db_file_path = Path(__file__).parent.parent / "memory_db.sqlite"
+    return f"sqlite:///{db_file_path.absolute()}"
 
 
 DATABASE_URL = get_database_url()
@@ -69,6 +72,38 @@ def get_db():
         raise
     finally:
         db.close()
+
+
+def log_database_info():
+    """Log database info on startup: path, users table columns, alembic version."""
+    print("=" * 50)
+    print("[Database Startup]")
+    print(f"DATABASE_URL: {DATABASE_URL}")
+    
+    if IS_SQLITE:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        print(f"Database file path: {db_path}")
+    
+    # Print users table columns
+    print("\n[Database] Users table columns (PRAGMA table_info(users)):")
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA table_info(users);"))
+            for row in result:
+                print(f"  {row}")
+    except Exception as e:
+        print(f"  Could not get users table info: {e}")
+    
+    # Print alembic version
+    print("\n[Database] Alembic version:")
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT version_num FROM alembic_version;"))
+            for row in result:
+                print(f"  {row[0]}")
+    except Exception as e:
+        print(f"  Could not get alembic version: {e}")
+    print("=" * 50)
 
 
 def init_database():

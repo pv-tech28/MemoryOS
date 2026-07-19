@@ -42,7 +42,7 @@ async def chat_with_document(
         # Get or create chat ID
         chat_id = request.chat_id
         if not chat_id:
-            chat_id = create_chat(document_id=request.document_id, user_id=current_user.id)
+            chat_id = create_chat(document_id=request.document_id, user_id="default_user")
 
         # Retrieve conversation history
         chat_history = get_chat_history(chat_id)
@@ -86,7 +86,7 @@ async def chat_with_document(
                 full_history = get_chat_history(chat_id)
                 # Only extract memories every 3 messages or if it's the first message
                 if len(full_history) % 3 == 0 or len(full_history) == 1:
-                    extract_memories(chat_id, full_history, user_id=current_user.id)
+                    extract_memories(chat_id, full_history, user_id="default_user")
             except Exception as extract_error:
                 print(f"[Memory Extractor] Error extracting memories: {extract_error}")
 
@@ -103,7 +103,7 @@ async def chat_with_document(
             title=f"Ask EVOLVE: {request.question[:50]}{'...' if len(request.question) > 50 else ''}",
             description=f"AI answered your question in {result['processing_time']:.2f}s.",
             event_type="chat",
-            user_id=current_user.id
+            user_id="default_user"
         )
 
         return ChatResponse(

@@ -194,8 +194,7 @@ export default function UploadPage() {
               ref={fileInputRef}
               type="file"
               multiple
-              webkitdirectory=""
-              directory=""
+              {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
               accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.webp,.mp3,.wav,.m4a"
               className="hidden"
               onChange={handleFileSelect}

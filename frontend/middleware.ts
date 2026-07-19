@@ -9,7 +9,18 @@ export async function middleware(req: NextRequest) {
   const supabase = createServerClient(
     'https://jhzkjlfmiycpzczujzzu.supabase.co',
     'sb_publishable_UT66j0qs7YLBQL7LSxjhZQ_Uok2gg-B',
-    { req, res }
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll().map(({ name, value }) => ({ name, value }));
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            res.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
   );
 
   // Refresh session if expired - required for Server Components

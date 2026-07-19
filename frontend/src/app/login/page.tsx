@@ -34,10 +34,13 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await signInWithGoogle();
+      // signInWithOAuth redirects the page, so we don't need to wait for it to resolve
+      signInWithGoogle().catch((err: any) => {
+        setError(err.message || 'Google login failed');
+        setLoading(false);
+      });
     } catch (err: any) {
       setError(err.message || 'Google login failed');
-    } finally {
       setLoading(false);
     }
   };

@@ -30,7 +30,7 @@ def create_memory(
     memory_type: str,
     memory_text: str,
     importance: float = 0.5,
-    user_id: str = "default",
+    user_id: str = "default_user",
 ) -> str:
     """Create a new memory and return its ID."""
     db = _get_db()
@@ -42,12 +42,17 @@ def create_memory(
 
         # Add timeline event (import here to avoid circular import)
         from app.services.timeline_service import add_timeline_event
+        from app.services.memory_graph_builder import update_graph_from_memory
         add_timeline_event(
             title=f"Memory Created: {memory_type}",
             description=memory_text[:100] + ("..." if len(memory_text) > 100 else ""),
             event_type="memory",
             related_memory=memory_id,
+            user_id=user_id,
         )
+        
+        update_graph_from_memory(memory_text, memory_type, user_id)
+        
         return memory_id
     except Exception:
         db.rollback()
@@ -87,7 +92,7 @@ def get_memories_by_chat_id(
 def get_relevant_memories(
     query_text: str,
     chat_id: Optional[str] = None,
-    user_id: str = "default",
+    user_id: str = "default_user",
     limit: int = 10,
     min_importance: float = 0.3,
 ) -> List[Dict[str, Any]]:
@@ -125,7 +130,7 @@ def update_memory(
 def find_existing_memory(
     memory_text: str,
     memory_type: str,
-    user_id: str = "default",
+    user_id: str = "default_user",
 ) -> Optional[Dict[str, Any]]:
     """Find an existing memory by similarity for deduplication."""
     db = _get_db()
@@ -135,7 +140,7 @@ def find_existing_memory(
         db.close()
 
 
-def delete_memory(memory_id: str) -> bool:
+def delete_memory(memory_id: str, user_id: str = "default_user") -> bool:
     """Delete a memory by ID."""
     db = _get_db()
     try:
@@ -149,7 +154,7 @@ def delete_memory(memory_id: str) -> bool:
         db.close()
 
 
-def get_all_memories(user_id: str = "default") -> List[Dict[str, Any]]:
+def get_all_memories(user_id: str = "default_user") -> List[Dict[str, Any]]:
     """Get all memories from the database."""
     db = _get_db()
     try:

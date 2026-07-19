@@ -1,13 +1,14 @@
+﻿
 /**
  * EVOLVE AI — API Client
  * Functions for communicating with the FastAPI backend.
  */
-import { supabase } from "@/lib/supabase";
+import { supabase } from "./supabase";
 
 const API_BASE = "http://localhost:8000/api";
 
 // Helper to get auth headers
-async function getAuthHeaders() {
+async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (token) {
@@ -18,7 +19,7 @@ async function getAuthHeaders() {
   return {};
 }
 
-/* ─── Types ─── */
+/* --- Types --- */
 
 export interface DocumentInfo {
   id: string;
@@ -66,7 +67,7 @@ export interface UploadResponse {
   message: string;
 }
 
-/* ─── Documents ─── */
+/* --- Documents --- */
 
 export async function uploadDocument(
   file: File,
@@ -131,7 +132,7 @@ export async function deleteDocument(docId: string): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete document");
 }
 
-/* ─── Chat ─── */
+/* --- Chat --- */
 
 export async function chatWithDocument(
   question: string,
@@ -160,7 +161,7 @@ export async function chatWithDocument(
   return res.json();
 }
 
-/* ──────────────── Health ──────────────── */
+/* --- Health --- */
 
 export async function checkHealth(): Promise<boolean> {
   try {
@@ -171,7 +172,7 @@ export async function checkHealth(): Promise<boolean> {
   }
 }
 
-/* ──────────────── Memory Graph ──────────────── */
+/* --- Memory Graph --- */
 
 export interface GraphNode {
   id: string;
@@ -240,7 +241,7 @@ export async function getRelatedMemories(entityName: string): Promise<RelatedMem
   return res.json();
 }
 
-/* ─── Authentication ─── */
+/* --- Authentication --- */
 
 export async function loginWithGoogle(): Promise<void> {
   window.location.href = `${API_BASE}/auth/google/login`;
@@ -253,7 +254,7 @@ export async function checkAuthStatus(): Promise<{ authenticated: boolean }> {
   return res.json();
 }
 
-/* ─── Sources Sync ─── */
+/* --- Sources Sync --- */
 
 export async function syncGmail(): Promise<{ status: string; message: string }> {
   const headers = await getAuthHeaders();
@@ -276,7 +277,28 @@ export async function syncCalendar(): Promise<{ status: string; message: string 
   return res.json();
 }
 
-/* ─── Memories ─── */
+export async function saveGoogleTokens(
+  providerToken: string,
+  providerRefreshToken: string,
+  scopes: string[]
+): Promise<void> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/sources/google/save-tokens`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify({
+      provider_token: providerToken,
+      provider_refresh_token: providerRefreshToken,
+      scopes: scopes,
+    }),
+  });
+  if (!res.ok) throw new Error("Failed to save Google tokens");
+}
+
+/* --- Memories --- */
 
 export interface Memory {
   id: string;
@@ -318,42 +340,52 @@ export async function getRelevantMemories(query: string, chatId?: string): Promi
 
 export async function deleteMemory(memoryId: string): Promise<void> {
   const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/memories/${memoryId}`, {
-        method: "DELETE",
-        headers,
-    });
-    if (!res.ok) throw new Error("Failed to delete memory");
+  const res = await fetch(`${API_BASE}/memories/${memoryId}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) throw new Error("Failed to delete memory");
 }
 
-
-
 export interface GraphStats {
-    total_nodes: number;
-    total_edges: number;
-    node_counts: Record<string, number>;
-    most_connected: {
-        id: string;
-        name: string;
-        type: string;
-        connection_count: number;
-    } | null;
-    newest_node: {
-        id: string;
-        name: string;
-        type: string;
-        created_at: string;
-    } | null;
-    avg_connections: number;
+  total_nodes: number;
+  total_edges: number;
+  node_counts: Record<string, number>;
+  most_connected: {
+    id: string;
+    name: string;
+    type: string;
+    connection_count: number;
+  } | null;
+  newest_node: {
+    id: string;
+    name: string;
+    type: string;
+    created_at: string;
+  } | null;
+  avg_connections: number;
+  connected_components?: number;
+  largest_cluster?: {
+    size: number;
+    node_ids: string[];
+  };
+  central_nodes?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    centrality: number;
+  }>;
+  communities?: Array<Array<string>>;
 }
 
 export async function getGraphStats(): Promise<GraphStats> {
   const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/memories/stats`, { headers });
-    if (!res.ok) throw new Error("Failed to get graph stats");
-    return res.json();
+  const res = await fetch(`${API_BASE}/memories/stats`, { headers });
+  if (!res.ok) throw new Error("Failed to get graph stats");
+  return res.json();
 }
 
-/* ─── Timeline ─── */
+/* --- Timeline --- */
 
 export interface TimelineEvent {
   id: string;
@@ -388,7 +420,7 @@ export async function deleteTimelineEvent(eventId: string): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete timeline event");
 }
 
-/* ─── Dashboard ─── */
+/* --- Dashboard --- */
 
 export interface DashboardStats {
   total_memories: number;
@@ -416,7 +448,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   return res.json();
 }
 
-/* ─── Daily Summary ─── */
+/* --- Daily Summary --- */
 
 export interface DailySummaryStats {
   new_documents: number;
@@ -446,7 +478,7 @@ export async function getDailySummary(): Promise<DailySummaryResponse> {
   return res.json();
 }
 
-/* ─── Settings ─── */
+/* --- Settings --- */
 
 export interface Profile {
   id: string;
@@ -615,7 +647,7 @@ export async function updateAllSettings(data: Partial<UserSettings>): Promise<Us
       params.set(key, String(value));
     }
   }
-  
+
   const res = await fetch(`${API_BASE}/settings/all?${params.toString()}`, {
     method: "PUT",
     headers,

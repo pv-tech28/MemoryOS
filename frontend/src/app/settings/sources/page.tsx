@@ -6,11 +6,14 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, Mail, HardDrive, Calendar, RefreshCw, Link2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { getConnectedSources, syncSource, disconnectSource, ConnectedSources } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export default function ConnectedSourcesPage() {
   const router = useRouter();
+  const { signInWithGoogle } = useAuth();
   const [sources, setSources] = useState<ConnectedSources | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -30,6 +33,24 @@ export default function ConnectedSourcesPage() {
       console.error(err);
     } finally {
       setLoading(prev => ({ ...prev, [source]: false }));
+    }
+  };
+
+  const handleConnect = async () => {
+    setLoading(prev => ({ ...prev, google: true }));
+    setError(null);
+    try {
+      console.log("[Sources] Connecting Google sources...");
+      // signInWithOAuth redirects the page, so we don't need to wait for it to resolve
+      signInWithGoogle().catch((err: any) => {
+        console.error("[Sources] Failed to connect:", err);
+        setError(err.message || "Failed to connect Google sources");
+        setLoading(prev => ({ ...prev, google: false }));
+      });
+    } catch (err: any) {
+      console.error("[Sources] Failed to connect:", err);
+      setError(err.message || "Failed to connect Google sources");
+      setLoading(prev => ({ ...prev, google: false }));
     }
   };
 
@@ -134,13 +155,19 @@ export default function ConnectedSourcesPage() {
                       </button>
                     </>
                   )}
+                  {error && (
+                    <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                      {error}
+                    </div>
+                  )}
                   {!data?.connected && (
                     <button
                       className="flex-1 py-2 px-4 rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-                      onClick={() => window.location.href = "http://localhost:8000/api/auth/google/login"}
+                      onClick={handleConnect}
+                      disabled={loading.google}
                     >
                       <Link2 size={16} />
-                      Connect
+                      {loading.google ? "Connecting..." : "Connect"}
                     </button>
                   )}
                 </div>

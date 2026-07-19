@@ -13,11 +13,11 @@ def _get_db():
     return SessionLocal()
 
 
-def create_chat(document_id: Optional[str] = None) -> str:
+def create_chat(document_id: Optional[str] = None, user_id: str = "default_user") -> str:
     """Create a new chat session and return its ID."""
     db = _get_db()
     try:
-        chat_id = ChatRepository.create_chat(db, document_id)
+        chat_id = ChatRepository.create_chat(db, document_id, user_id)
         db.commit()
         return chat_id
     except Exception:

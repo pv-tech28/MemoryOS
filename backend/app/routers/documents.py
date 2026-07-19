@@ -191,7 +191,7 @@ async def upload_document(
             file_size=len(content),
             status="ready",
             metadata=metadata,
-            user_id=current_user.id,
+            user_id="default_user",
         )
         
         # Save chunks to PostgreSQL document_chunks table
@@ -213,7 +213,7 @@ async def upload_document(
             file_path=file_path,
             file_size=len(content),
             mime_type=file.content_type,
-            user_id=current_user.id,
+            user_id="default_user",
         )
         
         # Add to knowledge graph with enhanced document node
@@ -242,6 +242,7 @@ async def upload_document(
         )
         graph_service.process_text(
             text=full_text,
+            user_id="default_user",
             source_node=doc_node,
             context={"type": "document", "source": "upload"},
             doc_id=doc_id
@@ -261,7 +262,8 @@ async def upload_document(
             title=f"File Uploaded: {file.filename}",
             description=f"Successfully processed into {len(chunks)} chunks.",
             event_type=event_type,
-            related_document=doc_id
+            related_document=doc_id,
+            user_id="default_user"
         )
 
         print(f"[Upload] Document '{file.filename}' processed successfully! ({len(chunks)} chunks)")
@@ -288,7 +290,7 @@ async def list_documents(
     current_user: User = Depends(get_current_user)
 ):
     """List all uploaded documents."""
-    docs = DocumentRepository.list_all(db, user_id=current_user.id)
+    docs = DocumentRepository.list_all(db, user_id="default_user")
     documents = [
         DocumentResponse(**DocumentRepository.to_dict(doc))
         for doc in docs
@@ -297,20 +299,37 @@ async def list_documents(
 
 
 @router.get("/{doc_id}", response_model=DocumentResponse)
-async def get_document(doc_id: str, db: Session = Depends(get_db)):
+async def get_document(
+    doc_id: str, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get details for a single document."""
     doc = DocumentRepository.get(db, doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Ensure user owns the document
+    if doc.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have permission to access this document")
+    
     return DocumentResponse(**DocumentRepository.to_dict(doc))
 
 
 @router.delete("/{doc_id}")
-async def delete_document(doc_id: str, db: Session = Depends(get_db)):
+async def delete_document(
+    doc_id: str, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Delete a document and its embeddings."""
     doc = DocumentRepository.get(db, doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Ensure user owns the document
+    if doc.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have permission to delete this document")
 
     # Delete file from disk
     if doc.file_path and os.path.exists(doc.file_path):

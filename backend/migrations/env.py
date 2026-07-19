@@ -18,7 +18,7 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from app.database import Base
+from app.database import Base, get_database_url
 from app.models.db_models import (
     User, Document, DocumentChunk, Chat, ChatMessage,
     Memory, TimelineEventModel, GraphNodeModel, GraphEdgeModel,
@@ -34,20 +34,8 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    url = os.getenv("DIRECT_URL") or os.getenv("DATABASE_URL")
-    if url:
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql://", 1)
-        # Strip pgbouncer parameter which psycopg2 does not support
-        if "pgbouncer=true" in url:
-            import urllib.parse as urlparse
-            parsed = urlparse.urlparse(url)
-            query = urlparse.parse_qs(parsed.query)
-            query.pop("pgbouncer", None)
-            parsed = parsed._replace(query=urlparse.urlencode(query, doseq=True))
-            url = urlparse.urlunparse(parsed)
-        return url
-    return "sqlite:///./memory_db.sqlite"
+    # Use the EXACT same database URL function as the backend!
+    return get_database_url()
 
 
 def run_migrations_offline() -> None:

@@ -72,7 +72,7 @@ export default function AskPage() {
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
 
-  // Load chat history from localStorage only on client
+  // Load chat history and last active chat from localStorage only on client
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -80,26 +80,41 @@ export default function AskPage() {
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            setChatHistory(parsed.map((item: any) => ({
+            const loadedHistory = parsed.map((item: any) => ({
               ...item,
               date: new Date(item.date),
-            })));
+            }));
+            setChatHistory(loadedHistory);
+            // Restore last active chat if it exists, otherwise use most recent
+            if (loadedHistory.length > 0) {
+              const savedChatId = localStorage.getItem("lastActiveChatId");
+              const lastChat = savedChatId 
+                ? loadedHistory.find(c => c.id === savedChatId) 
+                : loadedHistory[0];
+              if (lastChat) {
+                setCurrentChat(lastChat);
+              }
+            }
           }
         }
       } catch (e) {
         console.error("Failed to parse chat history, resetting:", e);
         localStorage.removeItem("chatHistory");
+        localStorage.removeItem("lastActiveChatId");
       }
       setChatHistoryLoaded(true);
     }
   }, []);
 
-  // Save chat history to localStorage whenever it changes
+  // Save chat history and last active chat to localStorage
   useEffect(() => {
     if (typeof window !== "undefined" && chatHistoryLoaded) {
       localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+      if (currentChat) {
+        localStorage.setItem("lastActiveChatId", currentChat.id);
+      }
     }
-  }, [chatHistory, chatHistoryLoaded]);
+  }, [chatHistory, chatHistoryLoaded, currentChat]);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -242,10 +257,10 @@ export default function AskPage() {
           : prev
       );
 
-      // Update chat history list
+      // Update chat history list using previous state to avoid stale closure
       setChatHistory((prev) =>
         prev.map((chat) =>
-          chat.id === (currentChat?.id || "temp-id")
+          chat.id === "temp-id"
             ? { ...chat, id: response.chat_id, messages: [...chat.messages, userMsg, aiMsg] }
             : chat
         )
