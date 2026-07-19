@@ -2,6 +2,10 @@
 
 > Your second brain that remembers conversations, files, emails, events, and relationships across your digital life.
 
+## Authors
+- Siddh Tyagi
+- Pratha Varshney
+
 ## Project Status
 
 EVOLVE AI is now a working full-stack Memory OS with a FastAPI backend, a Next.js frontend, Supabase-backed auth and relational storage, local semantic retrieval, Google source syncing, and an interactive knowledge graph UI.
