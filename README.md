@@ -323,17 +323,6 @@ Key tables in the PostgreSQL database:
 - [x] Google Drive & Gmail Integration
 - [x] Dark Theme UI
 
-### 🚧 Upcoming
-- [ ] Collaborative Memory
-- [ ] Calendar Integration
-- [ ] Voice Memory
-- [ ] Mobile App
-- [ ] Agentic Memory
-- [ ] Memory Sharing
-- [ ] Browser Extension
-- [ ] Docker Deployment
-- [ ] CI/CD Pipeline
-
 ---
 
 ## ⚡ Performance
@@ -387,12 +376,9 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-## 👨‍💻 Developer
+## 👨‍💻 Developers
 
-**Siddh Tyagi**
-- GitHub: [@pv-tech28](https://github.com/pv-tech28)
-- LinkedIn: [Siddh Tyagi](https://linkedin.com/in/siddh-tyagi)
-- Portfolio: [siddhtyagi.com](https://siddhtyagi.com)
+**Siddh Tyagi** & **Pratha Varshney**
 
 ---
 
