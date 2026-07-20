@@ -1,7 +1,7 @@
 # EVOLVE AI
 
 <p align="center">
-  <img src="https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=AI%20Memory%20Operating%20System%20logo%20with%20futuristic%20design%20and%20purple%20glow%2C%20dark%20theme&image_size=square_hd" alt="EVOLVE AI Logo" width="200" />
+  <img src="logo.png" alt="EVOLVE AI Logo" width="200" />
 </p>
 
 <p align="center">
