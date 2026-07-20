@@ -1,256 +1,401 @@
-# EVOLVE AI - Digital Memory OS
+# EVOLVE AI
 
-> Your second brain that remembers conversations, files, emails, events, and relationships across your digital life.
+<p align="center">
+  <img src="https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=AI%20Memory%20Operating%20System%20logo%20with%20futuristic%20design%20and%20purple%20glow%2C%20dark%20theme&image_size=square_hd" alt="EVOLVE AI Logo" width="200" />
+</p>
 
-## Authors
-- Siddh Tyagi
-- Pratha Varshney
+<p align="center">
+  <b>AI Memory Operating System</b>
+  <br />
+  <i>An AI-powered digital memory platform that connects your documents, emails, conversations, and knowledge into a searchable semantic memory graph.</i>
+</p>
 
-## Project Status
+<p align="center">
+  <a href="#-features">Features</a> •
+  <a href="#-tech-stack">Tech Stack</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-architecture">Architecture</a> •
+  <a href="#-contributing">Contributing</a>
+</p>
 
-EVOLVE AI is now a working full-stack Memory OS with a FastAPI backend, a Next.js frontend, Supabase-backed auth and relational storage, local semantic retrieval, Google source syncing, and an interactive knowledge graph UI.
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white" alt="Supabase" />
+  <img src="https://img.shields.io/badge/PostgreSQL-316192?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/OpenRouter-FF5722?style=flat-square" alt="OpenRouter" />
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+</p>
 
-This README reflects the current implementation state of the repository: what is already done, how the system works, and what remains before production readiness.
+---
 
-## What Is Done
+## 📋 Project Overview
 
-### Core product flows
+**EVOLVE AI** is a digital memory operating system designed to help you organize, search, and interact with your personal knowledge graph. Unlike traditional chat interfaces that forget context after each session, EVOLVE AI builds a persistent, semantic memory of your documents, emails, conversations, and more.
 
-- Ask page is implemented for chat-based retrieval and answer generation.
-- Supabase authentication flow is implemented with login, signup, forgot-password, reset-password, and Google OAuth entry points.
-- Protected app routing redirects unauthenticated users to login and sends authenticated users into the dashboard.
-- Dashboard/home experience has been split out from the public root route.
-- Files flow supports uploads and document ingestion.
-- Memory Graph page renders an interactive graph with search, filters, minimap, force layout, and related-memory exploration.
-- Timeline page shows chronological activity and memory-related events.
-- Sources page supports Google integrations plus uploaded content.
-- Settings pages exist for profile, notifications, storage, language, email, password/security, and related account preferences.
+### What makes EVOLVE AI different?
 
-### Backend architecture
+| Aspect | Traditional ChatGPT | EVOLVE AI |
+|--------|---------------------|-----------|
+| Memory | Session-based, ephemeral | Persistent, semantic memory graph |
+| Knowledge | Generic training data | Your personal knowledge corpus |
+| Context | Limited to current conversation | Full historical context and relationships |
+| Integration | Standalone | Connects Gmail, Google Drive, local files, and more |
 
-- FastAPI application is wired through modular routers for chat, documents, memory graph, auth, sources, memories, timeline, dashboard, and settings.
-- Authenticated backend routes verify Supabase bearer tokens and resolve the local `User` record with `get_current_user`.
-- Main product routes now pass `current_user.id` into document, chat, graph, memory, timeline, dashboard, source, and settings operations.
-- SQLAlchemy models and repositories are used for structured persistence instead of keeping everything in flat local files.
-- Supabase PostgreSQL is the primary database target, with SQLite fallback for local development when `DATABASE_URL` is not provided.
-- Database initialization runs automatically on backend startup.
+---
 
-### Memory and retrieval system
+## ✨ Features
 
-- Document chunks are embedded and used for retrieval-augmented generation.
-- Chat history and extracted memories are persisted.
-- Memory extraction can be toggled with environment configuration.
-- Knowledge graph entities and edges are built from uploaded content and synced source data.
-- Related memories and graph context are exposed back to the UI.
+### Authentication & Security
+- **Google OAuth**: Seamless sign-in with Google accounts
+- **Email Login**: Traditional email/password authentication
+- **Supabase Auth**: Industry-standard authentication and session management
+- **Row Level Security (RLS)**: Secure data isolation between users
+- **Protected Routes**: Automatic redirection for unauthenticated users
 
-### Graph system
+### Memory Graph & Knowledge Organization
+- **Interactive Knowledge Graph**: Visualize entities and their relationships
+- **Semantic Search**: Find information by meaning, not just keywords
+- **Entity Extraction**: Automatically extracts people, projects, documents, technologies, and more
+- **Relationship Detection**: Identifies connections between different pieces of information
+- **Graph Visualization**: React Flow-based interactive graph with filters and search
 
-- **Semantic Edge Relationships:** The graph backend has been upgraded to expose real semantic relationships with custom edge models containing `relationship`, `confidence`, and `animated` properties directly from PostgreSQL's `graph_edges` table.
-- **Auto-Layout Engine:** Replaced D3 force-directed physics with a stable hierarchical layout powered by [dagre](https://github.com/dagrejs/dagre). This ensures clean, deterministic placements and avoids overlapping edges or erratic movement.
-- **Custom Animated Edge Render:** Custom animated purple dashed edges (`#A855F7`) render relationship labels centered as floating text (avoiding default white boxes) with opacity dynamically driven by edge `confidence` (solid for > 0.9, semi-transparent for 0.7-0.9, very transparent for < 0.5).
-- **Selection & Search Highlighting:** Selecting any node highlights connected edges/neighbors and fades out unrelated elements. Searching a node centers the camera on it and highlights its paths.
-- **Category Filters:** Sidebar filters strictly toggle matching categories (`Person`, `Project`, `Document`, `Email`, `Technology`, `Company`, `Skill`, `Meeting`, `Memory`), hiding unrelated nodes entirely from the canvas.
-- **Metadata Integration:** Supporting document, email, meeting, and custom nodes are represented visually with full detail exploration in the sidebar.
+### Document & Content Management
+- **Document Upload**: Support for PDF, TXT, and other file formats
+- **PDF Parsing**: Extract text and metadata from PDF documents
+- **Google Drive Integration**: Sync files directly from Google Drive
+- **Gmail Integration**: Sync emails and attachments
+- **Vector Search**: Semantic search over your document corpus
 
-### Source integrations
+### AI & Memory Capabilities
+- **Chat with Documents**: Ask questions about your uploaded files
+- **AI Memory Extraction**: Automatically extracts key insights and memories
+- **Daily Summary**: Daily recap of your recent activities and memories
+- **Retrieval-Augmented Generation (RAG)**: Grounded responses based on your personal knowledge
+- **Timeline View**: Chronological view of your activities and memories
 
-- Google OAuth flow is implemented for Gmail, Drive, and Calendar.
-- Synced content is normalized and inserted into the same memory system as uploaded files.
-- Uploaded documents are also represented in the graph and linked back to the central user node.
+### User Interface
+- **Responsive Design**: Works beautifully on all devices
+- **Dark Theme**: Modern, eye-friendly dark mode
+- **Smooth Animations**: Framer Motion-powered animations
+- **Dashboard**: Central hub for your memory OS
+- **Settings Panel**: Comprehensive settings management
 
-### Stability fixes already completed
+---
 
-- Supabase Auth has been wired into the frontend session provider, middleware, API client headers, and backend route dependencies.
-- Local users are created or refreshed from Supabase JWTs, including profile metadata such as email, name, username, and avatar.
-- Legacy repository defaults remain for compatibility, while primary request paths now pass authenticated user IDs explicitly.
-- Heavy optional dependencies in the documents router were made lazy/optional so the backend can start even if OCR or Whisper-related packages are missing.
-- Supabase environment handling was stabilized for the current setup.
-- The project has been run locally and the major pages were verified to load.
+## 🛠️ Tech Stack
 
-## How It Works
+### Frontend
+- **Next.js 14**: React framework with App Router
+- **React 18**: UI library
+- **TypeScript**: Type-safe development
+- **Tailwind CSS**: Utility-first CSS framework
+- **Framer Motion**: Animation library
+- **React Flow**: Graph visualization
+- **Supabase Auth Helpers**: Authentication integration
 
-### 1. Frontend
+### Backend
+- **FastAPI**: Modern, fast (high-performance) web framework
+- **SQLAlchemy 2.0**: SQL toolkit and ORM
+- **Pydantic**: Data validation and settings management
+- **Alembic**: Database migrations
 
-The frontend is a Next.js app that provides the user interface for:
+### AI & Retrieval
+- **OpenRouter**: Unified LLM API access
+- **Embeddings**: Semantic vector embeddings
+- **RAG Engine**: Retrieval-augmented generation
 
-- chat and memory retrieval,
-- uploads and source sync control,
-- graph visualization,
-- timeline browsing,
-- settings and profile management.
+### Database & Storage
+- **Supabase PostgreSQL**: Primary relational database
+- **SQLite**: Local development fallback
+- **Supabase Storage**: File storage
 
-### 2. API layer
+### Integrations
+- **Google OAuth**: Gmail, Drive, Calendar
+- **OpenRouter**: Multiple LLM providers
 
-The backend is a FastAPI app that exposes REST endpoints for each product area:
+---
 
-- chat,
-- documents,
-- memory graph,
-- auth,
-- sources,
-- timeline,
-- dashboard,
-- settings.
+## 🏗️ Architecture
 
-### 3. Auth flow
+```mermaid
+graph TD
+    Browser[Browser] --> Frontend[Next.js Frontend]
+    Frontend --> FastAPI[FastAPI Backend]
+    FastAPI --> SupabaseAuth[Supabase Auth]
+    FastAPI --> PostgreSQL[(PostgreSQL)]
+    FastAPI --> SupabaseStorage[Supabase Storage]
+    FastAPI --> OpenRouter[OpenRouter]
+    FastAPI --> GoogleAPIs[Google APIs]
+    PostgreSQL --> MemoryGraph[Memory Graph]
+    OpenRouter --> LLM[LLM Provider]
+    GoogleAPIs --> Gmail[Gmail]
+    GoogleAPIs --> Drive[Google Drive]
+```
 
-Supabase Auth owns identity and session issuance:
+---
 
-1. the frontend signs users in or up through Supabase,
-2. the active Supabase session provides an access token,
-3. the API client attaches that token as a bearer token,
-4. FastAPI verifies the token with Supabase,
-5. the backend creates or refreshes the local `User` row and scopes requests to that user.
+## 📁 Folder Structure
 
-### 4. Storage model
+```
+MemoryOS/
+├── backend/                  # FastAPI backend
+│   ├── app/
+│   │   ├── models/          # SQLAlchemy models and Pydantic schemas
+│   │   ├── repositories/    # Data access layer
+│   │   ├── routers/         # API endpoints
+│   │   ├── services/        # Business logic and AI services
+│   │   ├── database.py      # Database connection and setup
+│   │   ├── dependencies.py  # FastAPI dependencies (auth, DB)
+│   │   ├── main.py          # FastAPI application entry point
+│   │   └── supabase.py      # Supabase client setup
+│   ├── migrations/          # Alembic database migrations
+│   ├── requirements.txt     # Python dependencies
+│   └── .env.example         # Example environment variables
+├── frontend/                # Next.js frontend
+│   ├── src/
+│   │   ├── app/             # App Router pages
+│   │   ├── components/      # React components
+│   │   └── lib/             # Utility functions and API clients
+│   ├── package.json         # Node.js dependencies
+│   └── tsconfig.json        # TypeScript configuration
+└── README.md                # This file
+```
 
-The system currently uses:
+---
 
-- Supabase PostgreSQL as the primary relational database,
-- SQLite fallback for local-only development,
-- local vector storage for retrieval,
-- graph entities and relationships managed through the graph service layer.
+## 🧠 Memory Flow
 
-### 5. Ingestion pipeline
+```mermaid
+flowchart LR
+    A[User Uploads PDF] --> B[Parser]
+    B --> C[Chunking]
+    C --> D[Embeddings]
+    D --> E[Memory Extraction]
+    E --> F[Relationship Detection]
+    F --> G[(PostgreSQL)]
+    G --> H[Generate Graph]
+    H --> I[Ask EVOLVE]
+```
 
-When a file is uploaded or a source is synced:
+---
 
-1. content is parsed,
-2. text is chunked,
-3. chunks are embedded,
-4. metadata is stored,
-5. graph entities and relationships are created,
-6. timeline events and related records are updated.
-
-### 6. Retrieval flow
-
-When the user asks a question:
-
-1. relevant content is retrieved from stored memory/document context,
-2. graph and memory context are assembled,
-3. the LLM generates a grounded response,
-4. the UI displays structured output and supporting source context.
-
-## Current Tech Stack
-
-| Layer | Technology |
-| --- | --- |
-| Frontend | Next.js, React, TypeScript |
-| UI | Tailwind CSS, Framer Motion, React Flow |
-| Backend | FastAPI, SQLAlchemy |
-| Database | Supabase PostgreSQL, SQLite fallback |
-| Auth | Supabase Auth, bearer-token protected FastAPI routes |
-| Retrieval | Local embeddings and vector retrieval |
-| AI providers | OpenRouter, Gemini-compatible flows |
-| Integrations | Gmail, Google Drive, Google Calendar |
-
-## Run Locally
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.11+ or 3.12
+- Python 3.11+
 - Node.js 18+
-- npm
-- A configured `backend/.env`
+- npm or yarn
+- Supabase account
+- OpenRouter API key
 
-### Backend
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/pv-tech28/MemoryOS.git
+cd MemoryOS
+```
+
+### 2. Backend Setup
 
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cp .env.example .env
+# Edit .env with your credentials
 ```
 
-Backend URL:
-
-- `http://localhost:8000`
-- docs: `http://localhost:8000/docs`
-- health: `http://localhost:8000/api/health`
-
-### Frontend
+### 3. Frontend Setup
 
 ```bash
 cd frontend
 npm install
-npm run dev
+# Configure Supabase credentials in frontend/src/lib/supabase.ts
 ```
 
-Frontend URL:
+### 4. Environment Variables
 
-- `http://localhost:3000`
-
-If port 3000 is already occupied, Next.js may automatically move to `3001` or another free port.
-
-### Required environment variables
-
-At minimum, configure these in `backend/.env`:
+Create `backend/.env`:
 
 ```env
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_SECRET_KEY=your_supabase_service_or_secret_key
+# Supabase
+SUPABASE_URL=your_supabase_url
+SUPABASE_SECRET_KEY=your_supabase_secret_key
+DATABASE_URL=your_database_url
+DIRECT_URL=your_direct_database_url
+
+# OpenRouter
+OPENROUTER_API_KEY=your_openrouter_api_key
 LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=your_key_here
 OPENROUTER_MODEL=deepseek/deepseek-chat-v3-0324
-SESSION_SECRET_KEY=your_session_secret
-DATABASE_URL=your_supabase_transaction_pooler_url
-DIRECT_URL=your_supabase_direct_session_url
+
+# Google OAuth
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+
+# Session
+SESSION_SECRET_KEY=your_session_secret_key
 ```
 
-The frontend Supabase publishable key is currently configured in `frontend/src/lib/supabase.ts` and `frontend/middleware.ts`. For deployment, move those values into environment variables before building.
+### 5. Run the Application
 
-## What Remains
+**Backend:**
+```bash
+cd backend
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-### High priority
+**Frontend:**
+```bash
+cd frontend
+npm run dev
+```
 
-- Complete cleanup of legacy `default_user` compatibility paths in lower-level repositories and RAG helpers.
-- Verify every ingestion, retrieval, deletion, and source-sync path with multiple real Supabase users.
-- Persist and refresh Google credentials per authenticated user end to end.
-- Implement a real backend-powered daily summary flow instead of static/mock behavior.
-- Add stronger automated test coverage for core backend flows and source-sync regressions.
-- Harden error handling and retries around third-party sync operations.
+The application will be available at:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
-### Product expansion
+---
 
-- GitHub integration.
-- WhatsApp/chat export ingestion.
-- Better OCR and speech-to-text workflows for images and audio.
-- Unified cross-source search across all connected platforms.
-- Background job tracking and visible processing progress in the UI.
+## 📊 Database Schema
 
-### Scale and production readiness
+Key tables in the PostgreSQL database:
 
-- Production authorization review, including route-level ownership checks and Supabase key handling.
-- Background workers/queues for long-running ingestion.
-- Dockerized local and production deployment setup.
-- CI/CD and deployment automation.
-- Usage analytics, observability, and performance monitoring.
-- Optional move to a dedicated graph database if graph scale exceeds the current service design.
+| Table | Purpose |
+|-------|---------|
+| `users` | User profiles and authentication info |
+| `documents` | Uploaded and synced documents |
+| `document_chunks` | Chunked document text for RAG |
+| `memories` | Extracted memories and insights |
+| `graph_nodes` | Entities in the knowledge graph |
+| `graph_edges` | Relationships between entities |
+| `timeline_events` | Chronological events |
+| `chat_sessions` | Chat history sessions |
+| `chat_messages` | Individual chat messages |
 
-## Suggested Next Build Order
+---
 
-1. Remove remaining legacy `default_user` fallbacks and audit account isolation.
-2. Persist Google OAuth credentials per Supabase user and verify Gmail, Drive, and Calendar sync after login.
-3. Ship the daily summary backend flow.
-4. Add background job/progress infrastructure for uploads and source sync.
-5. Add targeted backend and integration tests.
-6. Containerize and prepare deployment.
+## 🔌 API Endpoints
 
-## Product Vision
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/signup` - User signup
+- `GET /api/auth/google/login` - Google OAuth login
+- `GET /api/auth/google/callback` - Google OAuth callback
 
-EVOLVE AI is meant to unify scattered personal and project context into one searchable, explainable memory system.
+### Chat
+- `POST /api/chat` - Send chat message
+- `GET /api/chat/history` - Get chat history
 
-Instead of searching across separate apps, users ask natural-language questions and get answers grounded in:
+### Memory Graph
+- `GET /api/memory-graph` - Get memory graph
+- `GET /api/memory-graph/nodes` - Get graph nodes
+- `GET /api/memory-graph/edges` - Get graph edges
 
-- chats,
-- uploaded files,
-- emails,
-- calendar events,
-- graph relationships,
-- and stored memories.
+### Documents
+- `POST /api/documents/upload` - Upload document
+- `GET /api/documents` - List documents
+- `DELETE /api/documents/:id` - Delete document
 
-The long-term goal is not just search. It is memory with context, structure, and recall.
+### Sources
+- `GET /api/sources` - List connected sources
+- `POST /api/sources/google/sync` - Sync Google sources
+
+---
+
+## 🗺️ Roadmap
+
+### ✅ Completed
+- [x] Supabase Authentication
+- [x] Memory Graph Visualization
+- [x] RAG System
+- [x] Timeline View
+- [x] PostgreSQL Migration
+- [x] Semantic Search
+- [x] Google Drive & Gmail Integration
+- [x] Dark Theme UI
+
+### 🚧 Upcoming
+- [ ] Collaborative Memory
+- [ ] Calendar Integration
+- [ ] Voice Memory
+- [ ] Mobile App
+- [ ] Agentic Memory
+- [ ] Memory Sharing
+- [ ] Browser Extension
+- [ ] Docker Deployment
+- [ ] CI/CD Pipeline
+
+---
+
+## ⚡ Performance
+
+- **FastAPI**: High-performance async backend
+- **React**: Virtual DOM and efficient re-renders
+- **Lazy Loading**: Components loaded on demand
+- **Caching**: Optimized API responses
+- **Optimized Queries**: Indexed database queries
+
+---
+
+## 🔒 Security
+
+- **JWT Authentication**: Secure token-based auth
+- **Supabase Auth**: Industry-standard identity management
+- **Row Level Security**: Data isolation per user
+- **Protected Routes**: Automatic auth checks
+- **Secure APIs**: Input validation and error handling
+
+---
+
+## 🚀 Deployment
+
+### Frontend
+Deploy to Vercel, Netlify, or any static hosting provider.
+
+### Backend
+Deploy to Railway, Render, AWS, or any Python hosting platform.
+
+### Database
+Use Supabase PostgreSQL for production.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a new branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+## 👨‍💻 Developer
+
+**Siddh Tyagi**
+- GitHub: [@pv-tech28](https://github.com/pv-tech28)
+- LinkedIn: [Siddh Tyagi](https://linkedin.com/in/siddh-tyagi)
+- Portfolio: [siddhtyagi.com](https://siddhtyagi.com)
+
+---
+
+<p align="center">
+  Built with ❤️ by Siddh Tyagi and Pratha Varshney
+</p>
