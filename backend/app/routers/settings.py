@@ -7,6 +7,7 @@ profile, email, security, appearance, notifications, language, etc.
 from datetime import datetime, UTC
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.database import get_db
 from app.models.db_models import User, Document, GraphNodeModel, GraphEdgeModel, Memory, Chat, ChatMessage, TimelineEventModel
 from app.services.memory_graph_builder import get_graph_service
@@ -41,11 +42,12 @@ async def get_connected_sources(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    gmail_count = db.query(Document).filter(Document.user_id == current_user.id, Document.source == "gmail").count()
-    drive_count = db.query(Document).filter(Document.user_id == current_user.id, Document.source == "drive").count()
-    calendar_count = db.query(Document).filter(Document.user_id == current_user.id, Document.source == "calendar").count()
+    user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+    gmail_count = db.query(Document).filter(Document.user_id == user_id, Document.source == "gmail").count()
+    drive_count = db.query(Document).filter(Document.user_id == user_id, Document.source == "drive").count()
+    calendar_count = db.query(Document).filter(Document.user_id == user_id, Document.source == "calendar").count()
     
-    has_google_creds = len(current_user.google_credentials) > 0
+    has_google_creds = len(getattr(current_user, "google_credentials", []) or []) > 0
     
     return {
         "gmail": {
@@ -179,16 +181,15 @@ async def get_storage_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    doc_count = db.query(Document).filter(Document.user_id == current_user.id).count()
-    memory_count = db.query(Memory).filter(Memory.user_id == current_user.id).count()
-    node_count = db.query(GraphNodeModel).filter(GraphNodeModel.user_id == current_user.id).count()
+    user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+    doc_count = db.query(Document).filter(Document.user_id == user_id).count()
+    memory_count = db.query(Memory).filter(Memory.user_id == user_id).count()
+    node_count = db.query(GraphNodeModel).filter(GraphNodeModel.user_id == user_id).count()
     edge_count = db.query(GraphEdgeModel).filter(GraphEdgeModel.source_id.in_(
-        db.query(GraphNodeModel.id).filter(GraphNodeModel.user_id == current_user.id)
+        db.query(GraphNodeModel.id).filter(GraphNodeModel.user_id == user_id)
     )).count()
     
-    total_file_size = db.query(Document).filter(Document.user_id == current_user.id).with_entities(
-        db.func.sum(Document.file_size)
-    ).scalar() or 0
+    total_file_size = db.query(func.sum(Document.file_size)).filter(Document.user_id == user_id).scalar() or 0
     
     return {
         "documents_uploaded": doc_count,

@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Depends
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from app.services.memory_graph_builder import (
     get_graph_service,
     EntityNode,
@@ -34,6 +34,17 @@ router = APIRouter(prefix="/api/memory-graph", tags=["memory-graph"])
 def _load_metadata(user_id: str, db: Session) -> dict:
     """Load document metadata from PostgreSQL."""
     return DocumentRepository.to_metadata_dict(db, user_id=user_id)
+
+def safe_format_date(val: Any) -> str:
+    if not val:
+        return datetime.utcnow().strftime("%d %b %Y")
+    if isinstance(val, datetime):
+        return val.strftime("%d %b %Y")
+    try:
+        clean = str(val).rstrip("Z")
+        return datetime.fromisoformat(clean).strftime("%d %b %Y")
+    except Exception:
+        return str(val)[:10]
 
 # Node type colors
 NODE_COLORS = {
@@ -66,9 +77,10 @@ async def get_memory_graph(
 ):
     """Get full knowledge graph including all nodes and edges, plus document/source nodes."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         graph_service = get_graph_service()
-        nodes = graph_service.get_all_nodes("default_user")
-        edges = graph_service.get_all_edges("default_user")
+        nodes = graph_service.get_all_nodes(user_id)
+        edges = graph_service.get_all_edges(user_id)
 
         formatted_nodes = []
         node_id_map = {}
@@ -82,7 +94,7 @@ async def get_memory_graph(
                 "color": color,
                 "radius": 35,
                 "description": node.description or "",
-                "date": datetime.fromisoformat(node.created_at).strftime("%d %b %Y"),
+                "date": safe_format_date(node.created_at),
                 "type": node.type,
                 "importance": node.importance,
                 "connections": [],
@@ -90,7 +102,7 @@ async def get_memory_graph(
             formatted_nodes.append(formatted_node)
             node_id_map[node.id] = formatted_node
 
-        metadata = _load_metadata("default_user", db)
+        metadata = _load_metadata(user_id, db)
         for doc in metadata.values():
             doc_id = f"doc_{doc['id']}"
             source = doc.get("source", "upload")
@@ -117,7 +129,7 @@ async def get_memory_graph(
                 "color": color,
                 "radius": 30,
                 "description": f"Source document",
-                "date": datetime.fromisoformat(doc["uploaded_at"].rstrip("Z")).strftime("%d %b %Y"),
+                "date": safe_format_date(doc.get("uploaded_at")),
                 "type": category,
                 "connections": [],
             }
@@ -173,13 +185,14 @@ async def get_entity(
 ):
     """Get details for a single entity node, including connected content."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         graph_service = get_graph_service()
-        node = graph_service.get_node(node_id, "default_user")
+        node = graph_service.get_node(node_id, user_id)
         if not node:
             raise HTTPException(status_code=404, detail="Entity not found")
 
-        related_nodes = graph_service.find_related_nodes(node_id, "default_user")
-        all_metadata = _load_metadata("default_user", db)
+        related_nodes = graph_service.find_related_nodes(node_id, user_id)
+        all_metadata = _load_metadata(user_id, db)
 
         connected_documents = []
         connected_emails = []
@@ -210,8 +223,9 @@ async def search_entities(
 ):
     """Search for entities by name (substring match)."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         graph_service = get_graph_service()
-        results = graph_service.search_nodes(query, "default_user", type)
+        results = graph_service.search_nodes(query, user_id, type)
         return [node.model_dump() for node in results]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -223,8 +237,9 @@ async def get_subgraph(
 ):
     """Get subgraph containing specified nodes and connecting edges."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         graph_service = get_graph_service()
-        subgraph = graph_service.get_subgraph(node_ids, "default_user")
+        subgraph = graph_service.get_subgraph(node_ids, user_id)
         return {
             "nodes": [n.model_dump() for n in subgraph["nodes"]],
             "edges": [e.model_dump() for e in subgraph["edges"]]
@@ -239,13 +254,14 @@ async def highlight_entities(
 ):
     """Search for entities and return a subgraph to highlight (for chat integration)."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         graph_service = get_graph_service()
-        results = graph_service.search_nodes(query, "default_user")
+        results = graph_service.search_nodes(query, user_id)
         if not results:
             return {"nodes": [], "edges": [], "highlighted_ids": []}
 
         node_ids = [node.id for node in results]
-        subgraph = graph_service.get_subgraph(node_ids, "default_user")
+        subgraph = graph_service.get_subgraph(node_ids, user_id)
 
         formatted_nodes = []
         for node in subgraph["nodes"]:
@@ -284,8 +300,9 @@ async def get_smart_recommendations(
 ):
     """Get smart recommendations based on importance, recency, and access."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         graph_service = get_graph_service()
-        recommendations = graph_service.get_smart_recommendations("default_user", limit=limit)
+        recommendations = graph_service.get_smart_recommendations(user_id, limit=limit)
 
         formatted = []
         for node in recommendations:
@@ -305,8 +322,9 @@ async def get_smart_recommendations(
 async def get_graph_stats_endpoint(current_user: User = Depends(get_current_user)):
     """Get comprehensive graph statistics including communities, central nodes, etc."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         graph_service = get_graph_service()
-        return graph_service.get_stats("default_user")
+        return graph_service.get_stats(user_id)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -319,8 +337,9 @@ async def decay_graph(
 ):
     """Manually trigger importance decay for all nodes."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         graph_service = get_graph_service()
-        graph_service.decay_importance("default_user", decay_rate)
+        graph_service.decay_importance(user_id, decay_rate)
         return {"status": "success", "message": "Graph importance decayed successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

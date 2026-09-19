@@ -34,13 +34,14 @@ def list_memories(
 ):
     """List all memories."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         if chat_id:
-            memories = get_memories_by_chat_id(chat_id, min_importance=0.0, user_id="default_user")
+            memories = get_memories_by_chat_id(chat_id, min_importance=0.0, user_id=user_id)
         else:
             memories = get_relevant_memories(
                 "",
                 chat_id=None,
-                user_id="default_user",
+                user_id=user_id,
                 limit=100,
                 min_importance=0.0
             )
@@ -57,10 +58,11 @@ def list_relevant_memories(
 ):
     """List relevant memories for a query."""
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         memories = get_relevant_memories(
             query_text=query,
             chat_id=chat_id,
-            user_id="default_user",
+            user_id=user_id,
             limit=10,
             min_importance=0.3
         )
@@ -73,7 +75,8 @@ def list_relevant_memories(
 def remove_memory(memory_id: str, current_user: User = Depends(get_current_user)):
     """Delete a memory."""
     try:
-        success = delete_memory(memory_id, user_id="default_user")
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+        success = delete_memory(memory_id, user_id=user_id)
         if not success:
             raise HTTPException(status_code=404, detail="Memory not found")
         return {"success": True}
@@ -85,8 +88,9 @@ def remove_memory(memory_id: str, current_user: User = Depends(get_current_user)
 def get_graph(current_user: User = Depends(get_current_user)):
     """Get all graph nodes and edges."""
     try:
-        nodes = [GraphNode(**n) for n in get_all_graph_nodes(user_id="default_user")]
-        edges = [GraphEdge(**e) for e in get_all_graph_edges(user_id="default_user")]
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+        nodes = [GraphNode(**n) for n in get_all_graph_nodes(user_id=user_id)]
+        edges = [GraphEdge(**e) for e in get_all_graph_edges(user_id=user_id)]
         return GraphData(nodes=nodes, edges=edges)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -96,7 +100,8 @@ def get_graph(current_user: User = Depends(get_current_user)):
 def get_related_entity_memories(entity_name: str, current_user: User = Depends(get_current_user)):
     """Get related memories for an entity."""
     try:
-        result = get_related_memories(entity_name, user_id="default_user")
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+        result = get_related_memories(entity_name, user_id=user_id)
         return RelatedMemoriesResponse(
             node=GraphNode(**result["node"]) if result["node"] else None,
             edges=result["edges"],
@@ -109,9 +114,12 @@ def get_related_entity_memories(entity_name: str, current_user: User = Depends(g
 
 @router.get("/stats")
 def get_stats(current_user: User = Depends(get_current_user)):
-    """Get graph statistics."""
+    """Get graph stats."""
     try:
-        return get_graph_stats(user_id="default_user")
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+        return get_graph_stats(user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
 

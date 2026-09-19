@@ -39,10 +39,12 @@ async def chat_with_document(
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
     try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+
         # Get or create chat ID
         chat_id = request.chat_id
         if not chat_id:
-            chat_id = create_chat(document_id=request.document_id, user_id="default_user")
+            chat_id = create_chat(document_id=request.document_id, user_id=user_id)
 
         # Retrieve conversation history
         chat_history = get_chat_history(chat_id)
@@ -53,7 +55,8 @@ async def chat_with_document(
             document_id=request.document_id,
             top_k=5,
             chat_history=chat_history,
-            chat_id=chat_id
+            chat_id=chat_id,
+            user_id=user_id
         )
 
         # Convert source dicts to SourceReference models
@@ -86,7 +89,7 @@ async def chat_with_document(
                 full_history = get_chat_history(chat_id)
                 # Only extract memories every 3 messages or if it's the first message
                 if len(full_history) % 3 == 0 or len(full_history) == 1:
-                    extract_memories(chat_id, full_history, user_id="default_user")
+                    extract_memories(chat_id, full_history, user_id=user_id)
             except Exception as extract_error:
                 print(f"[Memory Extractor] Error extracting memories: {extract_error}")
 
@@ -103,7 +106,7 @@ async def chat_with_document(
             title=f"Ask EVOLVE: {request.question[:50]}{'...' if len(request.question) > 50 else ''}",
             description=f"AI answered your question in {result['processing_time']:.2f}s.",
             event_type="chat",
-            user_id="default_user"
+            user_id=user_id
         )
 
         return ChatResponse(

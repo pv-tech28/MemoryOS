@@ -17,9 +17,12 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.database import log_database_info
+    from app.seed import seed_demo_data_if_needed
     log_database_info()
     init_database()
+    seed_demo_data_if_needed()
     yield
+
 
 app = FastAPI(
     title="EVOLVE AI API",

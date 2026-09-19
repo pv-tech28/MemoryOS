@@ -180,6 +180,7 @@ async def upload_document(
         add_document(doc_id, chunk_texts, embeddings, metadatas)
 
         # Save metadata to DB
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
         DocumentRepository.create(
             db=db,
             doc_id=doc_id,
@@ -191,7 +192,7 @@ async def upload_document(
             file_size=len(content),
             status="ready",
             metadata=metadata,
-            user_id="default_user",
+            user_id=user_id,
         )
         
         # Save chunks to PostgreSQL document_chunks table
@@ -213,8 +214,9 @@ async def upload_document(
             file_path=file_path,
             file_size=len(content),
             mime_type=file.content_type,
-            user_id="default_user",
+            user_id=user_id,
         )
+        db.commit()
         
         # Add to knowledge graph with enhanced document node
         print(f"[Upload] Extracting entities and adding to knowledge graph...")
@@ -242,7 +244,7 @@ async def upload_document(
         )
         graph_service.process_text(
             text=full_text,
-            user_id="default_user",
+            user_id=user_id,
             source_node=doc_node,
             context={"type": "document", "source": "upload"},
             doc_id=doc_id
@@ -263,7 +265,7 @@ async def upload_document(
             description=f"Successfully processed into {len(chunks)} chunks.",
             event_type=event_type,
             related_document=doc_id,
-            user_id="default_user"
+            user_id=user_id
         )
 
         print(f"[Upload] Document '{file.filename}' processed successfully! ({len(chunks)} chunks)")
@@ -290,7 +292,8 @@ async def list_documents(
     current_user: User = Depends(get_current_user)
 ):
     """List all uploaded documents."""
-    docs = DocumentRepository.list_all(db, user_id="default_user")
+    user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+    docs = DocumentRepository.list_all(db, user_id=user_id)
     documents = [
         DocumentResponse(**DocumentRepository.to_dict(doc))
         for doc in docs
@@ -309,8 +312,9 @@ async def get_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    # Ensure user owns the document
-    if doc.user_id != current_user.id:
+    # Ensure user owns the document or is demo user
+    effective_uid = current_user.id if current_user and current_user.id else "demo-user-id"
+    if doc.user_id != effective_uid and doc.user_id not in ("demo-user-id", "default_user"):
         raise HTTPException(status_code=403, detail="You do not have permission to access this document")
     
     return DocumentResponse(**DocumentRepository.to_dict(doc))
@@ -327,8 +331,9 @@ async def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    # Ensure user owns the document
-    if doc.user_id != current_user.id:
+    # Ensure user owns the document or is demo user
+    effective_uid = current_user.id if current_user and current_user.id else "demo-user-id"
+    if doc.user_id != effective_uid and doc.user_id not in ("demo-user-id", "default_user"):
         raise HTTPException(status_code=403, detail="You do not have permission to delete this document")
 
     # Delete file from disk
@@ -343,5 +348,6 @@ async def delete_document(
 
     # Remove from database (cascades chunks)
     DocumentRepository.delete(db, doc_id)
+    db.commit()
 
     return {"message": f"Document '{doc.filename}' deleted successfully."}
