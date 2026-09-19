@@ -10,7 +10,13 @@ from sqlalchemy import func
 from app.models.db_models import Memory
 
 
-DEFAULT_USER_ID = "default_user"
+DEFAULT_USER_ID = "demo-user-id"
+
+
+def _mem_user_filter(user_id: str):
+    if user_id in ("demo-user-id", "default_user", None, ""):
+        return Memory.user_id.in_(["demo-user-id", "default_user"])
+    return Memory.user_id == user_id
 
 
 class MemoryRepository:
@@ -25,12 +31,13 @@ class MemoryRepository:
         user_id: str = DEFAULT_USER_ID,
     ) -> str:
         """Create a new memory and return its ID."""
+        effective_uid = "demo-user-id" if user_id in ("default_user", None, "") else user_id
         memory_id = str(uuid.uuid4())
         now = datetime.utcnow()
         mem = Memory(
             id=memory_id,
             chat_id=chat_id,
-            user_id=user_id,
+            user_id=effective_uid,
             type=memory_type,
             memory=memory_text,
             importance=importance,
@@ -63,13 +70,16 @@ class MemoryRepository:
         chat_id: str,
         limit: Optional[int] = None,
         min_importance: float = 0.0,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Retrieve memories for a specific chat."""
         q = (
             db.query(Memory)
             .filter(Memory.chat_id == chat_id, Memory.importance >= min_importance)
-            .order_by(Memory.created_at.desc())
         )
+        if user_id:
+            q = q.filter(_mem_user_filter(user_id))
+        q = q.order_by(Memory.created_at.desc())
         if limit:
             q = q.limit(limit)
         return [MemoryRepository._to_dict(m) for m in q.all()]
@@ -85,7 +95,7 @@ class MemoryRepository:
     ) -> List[Dict[str, Any]]:
         """Retrieve relevant memories ordered by importance."""
         q = db.query(Memory).filter(
-            Memory.user_id == user_id,
+            _mem_user_filter(user_id),
             Memory.importance >= min_importance,
         )
         if chat_id:
@@ -134,7 +144,7 @@ class MemoryRepository:
         mem = (
             db.query(Memory)
             .filter(
-                Memory.user_id == user_id,
+                _mem_user_filter(user_id),
                 Memory.type == memory_type,
                 func.lower(Memory.memory).contains(memory_lower),
             )
@@ -146,7 +156,7 @@ class MemoryRepository:
         mem = (
             db.query(Memory)
             .filter(
-                Memory.user_id == user_id,
+                _mem_user_filter(user_id),
                 func.lower(Memory.memory).contains(memory_lower),
             )
             .first()
@@ -170,7 +180,7 @@ class MemoryRepository:
         """Get all memories for a user."""
         mems = (
             db.query(Memory)
-            .filter(Memory.user_id == user_id)
+            .filter(_mem_user_filter(user_id))
             .order_by(Memory.created_at.desc())
             .all()
         )

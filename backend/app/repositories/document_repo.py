@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 from app.models.db_models import Document, DocumentChunk, Upload
 
 
-DEFAULT_USER_ID = "default_user"
+DEFAULT_USER_ID = "demo-user-id"
+
+
+def _doc_user_filter(user_id: str):
+    if user_id in ("demo-user-id", "default_user", None, ""):
+        return Document.user_id.in_(["demo-user-id", "default_user"])
+    return Document.user_id == user_id
 
 
 class DocumentRepository:
@@ -28,9 +34,10 @@ class DocumentRepository:
         user_id: str = DEFAULT_USER_ID,
     ) -> Document:
         """Create a new document record."""
+        effective_uid = "demo-user-id" if user_id in ("default_user", None, "") else user_id
         doc = Document(
             id=doc_id,
-            user_id=user_id,
+            user_id=effective_uid,
             filename=filename,
             file_path=file_path,
             source=source,
@@ -55,7 +62,7 @@ class DocumentRepository:
         """List all documents for a user, newest first."""
         return (
             db.query(Document)
-            .filter(Document.user_id == user_id)
+            .filter(_doc_user_filter(user_id))
             .order_by(Document.uploaded_at.desc())
             .all()
         )
@@ -75,14 +82,14 @@ class DocumentRepository:
         """Get all documents from a specific source (gmail, drive, calendar, upload)."""
         return (
             db.query(Document)
-            .filter(Document.user_id == user_id, Document.source == source)
+            .filter(_doc_user_filter(user_id), Document.source == source)
             .all()
         )
 
     @staticmethod
     def count_by_source(db: Session, user_id: str = DEFAULT_USER_ID) -> Dict[str, int]:
         """Count documents grouped by source."""
-        docs = db.query(Document).filter(Document.user_id == user_id).all()
+        docs = db.query(Document).filter(_doc_user_filter(user_id)).all()
         counts = {"document": 0, "gmail": 0, "calendar": 0}
         for doc in docs:
             src = doc.source or "document"

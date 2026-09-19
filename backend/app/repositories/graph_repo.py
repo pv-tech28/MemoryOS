@@ -11,7 +11,13 @@ from sqlalchemy import or_, func
 from app.models.db_models import GraphNodeModel, GraphEdgeModel
 
 
-DEFAULT_USER_ID = "default_user"
+DEFAULT_USER_ID = "demo-user-id"
+
+
+def _graph_user_filter(user_id: str):
+    if user_id in ("demo-user-id", "default_user", None, ""):
+        return GraphNodeModel.user_id.in_(["demo-user-id", "default_user"])
+    return GraphNodeModel.user_id == user_id
 
 
 class GraphRepository:
@@ -31,10 +37,11 @@ class GraphRepository:
         user_id: str = DEFAULT_USER_ID,
     ) -> GraphNodeModel:
         """Create a new graph node."""
+        effective_uid = "demo-user-id" if user_id in ("default_user", None, "") else user_id
         now = datetime.utcnow()
         node = GraphNodeModel(
             id=node_id,
-            user_id=user_id,
+            user_id=effective_uid,
             name=name,
             type=node_type,
             description=description,
@@ -81,7 +88,7 @@ class GraphRepository:
     @staticmethod
     def get_all_nodes(db: Session, user_id: str = DEFAULT_USER_ID) -> List[GraphNodeModel]:
         """Get all nodes for a user."""
-        return db.query(GraphNodeModel).filter(GraphNodeModel.user_id == user_id).all()
+        return db.query(GraphNodeModel).filter(_graph_user_filter(user_id)).all()
 
     @staticmethod
     def search_nodes(db: Session, query: str, user_id: str = DEFAULT_USER_ID) -> List[GraphNodeModel]:
@@ -89,7 +96,7 @@ class GraphRepository:
         return (
             db.query(GraphNodeModel)
             .filter(
-                GraphNodeModel.user_id == user_id,
+                _graph_user_filter(user_id),
                 func.lower(GraphNodeModel.name).contains(query.lower()),
             )
             .order_by(GraphNodeModel.importance.desc())
@@ -104,7 +111,7 @@ class GraphRepository:
         return (
             db.query(GraphNodeModel)
             .filter(
-                GraphNodeModel.user_id == user_id,
+                _graph_user_filter(user_id),
                 func.lower(GraphNodeModel.name) == name.strip().lower(),
                 func.lower(GraphNodeModel.type) == node_type.lower(),
             )
@@ -208,7 +215,7 @@ class GraphRepository:
         return (
             db.query(GraphEdgeModel)
             .join(GraphNodeModel, GraphEdgeModel.source_id == GraphNodeModel.id)
-            .filter(GraphNodeModel.user_id == user_id)
+            .filter(_graph_user_filter(user_id))
             .all()
         )
 

@@ -9,7 +9,13 @@ from sqlalchemy.orm import Session
 from app.models.db_models import TimelineEventModel
 
 
-DEFAULT_USER_ID = "default_user"
+DEFAULT_USER_ID = "demo-user-id"
+
+
+def _tl_user_filter(user_id: str):
+    if user_id in ("demo-user-id", "default_user", None, ""):
+        return TimelineEventModel.user_id.in_(["demo-user-id", "default_user"])
+    return TimelineEventModel.user_id == user_id
 
 # Color map for event types
 COLOR_MAP = {
@@ -44,10 +50,11 @@ class TimelineRepository:
         final_color = COLOR_MAP.get(event_type, color)
         event_id = str(uuid.uuid4())
         now = datetime.utcnow()
+        effective_uid = "demo-user-id" if user_id in ("default_user", None, "") else user_id
 
         event = TimelineEventModel(
             id=event_id,
-            user_id=user_id,
+            user_id=effective_uid,
             title=title,
             description=description,
             event_type=event_type,
@@ -73,7 +80,7 @@ class TimelineRepository:
         """
         events = (
             db.query(TimelineEventModel)
-            .filter(TimelineEventModel.user_id == user_id)
+            .filter(_tl_user_filter(user_id))
             .order_by(TimelineEventModel.created_at.desc())
             .limit(limit)
             .all()
@@ -96,7 +103,7 @@ class TimelineRepository:
         """Get timeline events as a flat list, newest first."""
         events = (
             db.query(TimelineEventModel)
-            .filter(TimelineEventModel.user_id == user_id)
+            .filter(_tl_user_filter(user_id))
             .order_by(TimelineEventModel.created_at.desc())
             .limit(limit)
             .all()
