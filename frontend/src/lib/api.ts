@@ -1,4 +1,4 @@
-
+﻿
 /**
  * EVOLVE AI — API Client
  * Functions for communicating with the FastAPI backend.
@@ -6,6 +6,14 @@
 import { supabase } from "./supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? "/api" : "http://localhost:8000/api");
+
+export function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(
+    "(^|;)\\s*" + name.replace(/([.$?*|{}()[\]\\/+^])/g, "\\$1") + "\\s*=\\s*([^;]+)"
+  );
+  return match ? decodeURIComponent(match[2]) : null;
+}
 
 // Helper to get auth headers
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -19,6 +27,16 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     }
   } catch (err) {
     console.warn("[API] Could not get Supabase session token:", err);
+  }
+
+  // Check for backend-issued JWT cookie (set by native Google OAuth flow)
+  if (typeof window !== "undefined") {
+    const backendToken = getCookie("evolve_auth_token");
+    if (backendToken && backendToken !== "null" && backendToken !== "undefined") {
+      return {
+        "Authorization": `Bearer ${backendToken}`,
+      };
+    }
   }
 
   // Check demo user mode
@@ -258,14 +276,38 @@ export async function getRelatedMemories(entityName: string): Promise<RelatedMem
 
 /* --- Authentication --- */
 
-export async function loginWithGoogle(): Promise<void> {
-  window.location.href = `${API_BASE}/auth/google/login`;
+export async function loginWithGoogle(redirectTo?: string): Promise<void> {
+  const base = `${API_BASE}/auth/google/login`;
+  const url = redirectTo
+    ? `${base}?redirect_to=${encodeURIComponent(redirectTo)}`
+    : base;
+  window.location.href = url;
 }
 
-export async function checkAuthStatus(): Promise<{ authenticated: boolean }> {
+export async function checkAuthStatus(): Promise<{ authenticated: boolean; has_google: boolean; user_id: string }> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/auth/status`, { headers });
   if (!res.ok) throw new Error("Failed to check auth status");
+  return res.json();
+}
+
+export interface BackendMeResponse {
+  id: string;
+  auth_id: string | null;
+  full_name: string | null;
+  username: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  plan: string | null;
+  memory_health: number | null;
+  created_at: string | null;
+}
+
+export async function getMe(): Promise<BackendMeResponse | null> {
+  const headers = await getAuthHeaders();
+  if (!headers["Authorization"]) return null;
+  const res = await fetch(`${API_BASE}/auth/me`, { headers });
+  if (!res.ok) return null;
   return res.json();
 }
 

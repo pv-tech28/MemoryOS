@@ -1,154 +1,239 @@
 """
 Authentication Router
-Handles Supabase Auth (Email/Password, Google OAuth, etc.
+Handles local FastAPI JWT authentication and Google OAuth2 flow,
+providing full fallback independence from external Supabase auth.
 """
 
 import os
+import uuid
+import hashlib
+from datetime import datetime, timedelta
+from typing import Optional
+
+import jwt
 from fastapi import APIRouter, Request, HTTPException, Depends, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
-from datetime import datetime
+from google_auth_oauthlib.flow import Flow
+import google.oauth2.id_token
+from google.auth.transport import requests as google_requests
 
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.dependencies import get_current_user
 from app.models.db_models import User, GraphNodeModel
-from app.supabase import supabase
 from app.repositories.auth_repo import AuthRepository
+from app.supabase import supabase
 
 load_dotenv()
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
-# Pydantic models for request bodies
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "your-secret-key-change-in-production")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
+
+GOOGLE_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/calendar.readonly",
+]
+
+
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str
     username: str
 
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
 
 class ResetPasswordRequest(BaseModel):
     new_password: str
 
-# Google OAuth configuration
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
 
-# Backward compatibility: keep user_credentials dict for sources.py
+def hash_password(password: str) -> str:
+    """Hash password with secret key salt."""
+    return hashlib.sha256((password + SESSION_SECRET_KEY).encode("utf-8")).hexdigest()
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify plain password against hashed password."""
+    return hash_password(plain_password) == hashed_password
+
+
+def create_access_token(user: User) -> str:
+    """Create signed JWT access token for user."""
+    payload = {
+        "sub": user.id,
+        "email": user.email,
+        "user_metadata": {
+            "full_name": user.full_name or "",
+            "username": user.username or "",
+            "avatar_url": user.avatar_url or "",
+        },
+        "exp": datetime.utcnow() + timedelta(days=30),
+        "iat": datetime.utcnow(),
+    }
+    return jwt.encode(payload, SESSION_SECRET_KEY, algorithm="HS256")
+
+
+# Backward compatibility: user_credentials dict for sources.py
 class DatabaseUserCredentialsDict(dict):
     def __contains__(self, key):
-        # We'll implement this properly later, for now default to checking if user exists
-        return True
+        db = SessionLocal()
+        try:
+            return AuthRepository.has_credentials(db, key)
+        finally:
+            db.close()
+
     def __getitem__(self, key):
-        # Return dummy data for compatibility
-        return {}
+        db = SessionLocal()
+        try:
+            creds = AuthRepository.get_credentials(db, key)
+            if creds is None:
+                raise KeyError(key)
+            return creds
+        finally:
+            db.close()
+
     def get(self, key, default=None):
-        return default or {}
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
 
 user_credentials = DatabaseUserCredentialsDict()
+
+
+def initialize_user_workspace(db: Session, user: User):
+    """Initialize a new user's workspace with root node."""
+    existing_root = db.query(GraphNodeModel).filter(
+        GraphNodeModel.user_id == user.id,
+        GraphNodeModel.type == "root"
+    ).first()
+    if not existing_root:
+        root_node = GraphNodeModel(
+            user_id=user.id,
+            name=f"{user.full_name or user.username or 'User'}'s Memory Graph",
+            type="root",
+            description="Root node of your knowledge graph",
+        )
+        db.add(root_node)
+        db.commit()
+
 
 @router.post("/signup")
 async def signup(data: SignupRequest, db: Session = Depends(get_db)):
     """Sign up a new user with email and password."""
-    if not supabase:
+    # Check if user already exists
+    existing = db.query(User).filter(
+        (User.email == data.email) | (User.username == data.username)
+    ).first()
+    if existing:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email or username already exists",
         )
-    try:
-        # Create user in Supabase Auth
-        auth_response = supabase.auth.sign_up({
-            "email": data.email,
-            "password": data.password,
-            "options": {
-                "data": {
-                    "full_name": data.full_name,
-                    "username": data.username,
-                }
-            }
-        })
 
-        if not auth_response.user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to create user in Supabase"
-            )
+    user = User(
+        id=str(uuid.uuid4()),
+        auth_id=str(uuid.uuid4()),
+        email=data.email,
+        full_name=data.full_name,
+        username=data.username,
+        password_hash=hash_password(data.password),
+        last_login=datetime.utcnow(),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
-        # Create user in our database
-        user = User(
-            auth_id=auth_response.user.id,
-            email=data.email,
-            full_name=data.full_name,
-            username=data.username,
-            last_login=datetime.utcnow(),
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    initialize_user_workspace(db, user)
 
-        # Initialize workspace, graph root node, etc.
-        initialize_user_workspace(db, user)
+    token = create_access_token(user)
+    return {
+        "message": "Signup successful",
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 604800,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "user_metadata": {
+                "full_name": user.full_name,
+                "username": user.username,
+                "avatar_url": user.avatar_url,
+            },
+        },
+    }
 
-        return {
-            "message": "Signup successful", "user_id": user.id }
-
-    except Exception as e:
-        db.rollback()
-        print(f"[Auth] Signup error: {str(e)}")
-        if "User already registered" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User already exists"
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
 
 @router.post("/login")
-async def login(data: LoginRequest):
+async def login(data: LoginRequest, db: Session = Depends(get_db)):
     """Login user with email and password."""
-    if not supabase:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
-        )
-    try:
-        auth_response = supabase.auth.sign_in_with_password({
-            "email": data.email,
-            "password": data.password
-        })
-        return {
-            "access_token": auth_response.session.access_token,
-            "refresh_token": auth_response.session.refresh_token,
-            "expires_in": auth_response.session.expires_in,
-            "user": {
-                "id": auth_response.user.id,
-                "email": auth_response.user.email,
-            }
-        }
-    except Exception as e:
-        print(f"[Auth] Login error: {str(e)}")
+    user = db.query(User).filter(User.email == data.email).first()
+
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Invalid email or password",
         )
 
+    # If user has a password set, verify it
+    if user.password_hash:
+        if not verify_password(data.password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
+    else:
+        # First time login with password for an existing OAuth or seed user
+        user.password_hash = hash_password(data.password)
+
+    user.last_login = datetime.utcnow()
+    db.commit()
+
+    token = create_access_token(user)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 604800,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "user_metadata": {
+                "full_name": user.full_name or "",
+                "username": user.username or "",
+                "avatar_url": user.avatar_url or "",
+            },
+        },
+    }
+
+
 @router.get("/status")
-async def get_auth_status():
-    """Check authentication status (for frontend use)."""
-    # For now, return that authentication is handled by Supabase client-side
-    # In the future, we could verify the session with Supabase
-    return {"authenticated": False}
+async def get_auth_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Check authentication status."""
+    has_google = AuthRepository.has_credentials(db, current_user.id)
+    return {
+        "authenticated": current_user.id not in ("demo-user-id", "default_user"),
+        "user_id": current_user.id,
+        "has_google": has_google,
+    }
 
 
 @router.get("/me")
@@ -163,123 +248,210 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "avatar_url": current_user.avatar_url,
         "plan": current_user.plan,
         "memory_health": current_user.memory_health,
-        "created_at": current_user.created_at.isoformat(),
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
     }
+
 
 @router.post("/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
-    """Send password reset email."""
-    if not supabase:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
-        )
-    try:
-        supabase.auth.reset_password_email(data.email, {
-            "redirect_to": "http://localhost:3000/reset-password"
-        })
-        return { "message": "Password reset email sent" }
-    except Exception as e:
-        print(f"[Auth] Forgot password error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    """Forgot password stub."""
+    return {"message": "If that email exists, password reset instructions have been sent."}
+
 
 @router.post("/reset-password")
-async def reset_password(data: ResetPasswordRequest, request: Request):
-    """Reset password using token from email."""
-    if not supabase:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
-        )
-    try:
-        # Get token from header
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authorization header")
+async def reset_password(data: ResetPasswordRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Reset password for current user."""
+    current_user.password_hash = hash_password(data.new_password)
+    db.commit()
+    return {"message": "Password reset successfully"}
 
-        token = auth_header.replace("Bearer ", "")
-        
-        # Update password using the token
-        supabase.auth.admin.update_user_by_id(
-            user_id="",  # We'll let Supabase handle via session, or frontend will handle this
-            updates={ "password": data.new_password }
-        )
-        
-        return { "message": "Password reset successfully" }
-    except Exception as e:
-        print(f"[Auth] Reset password error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
 
 @router.post("/logout")
 async def logout():
-    """Logout user (client-side only, invalidates session in Supabase)."""
-    if not supabase:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
-        )
-    try:
-        supabase.auth.sign_out()
-        return { "message": "Logged out" }
-    except Exception as e:
-        print(f"[Auth] Logout error: {str(e)}")
-        return { "message": "Logged out" }
+    """Logout user."""
+    return {"message": "Logged out"}
+
 
 @router.get("/google/login")
-async def google_login():
-    """Redirect to Google OAuth login URL."""
-    if not supabase:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
-        )
-    try:
-        print(f"[Auth] Starting Google OAuth flow, provider: google")
-        print(f"[Auth] Redirect URL: http://localhost:3000/dashboard")
-        auth_response = supabase.auth.sign_in_with_oauth({
-            "provider": "google",
-            "options": {
-                "redirect_to": "http://localhost:3000/dashboard",
-                "scopes": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/calendar.readonly"
+async def google_login(request: Request, redirect_to: str = "http://localhost:3000/dashboard"):
+    """Initiate Google OAuth2 flow using native Google credentials."""
+    if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET]):
+        raise HTTPException(status_code=500, detail="Google OAuth credentials not configured")
+
+    # Sanitize redirect_to: only allow localhost (frontend) URLs for security
+    frontend_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
+    ]
+    is_safe = False
+    normalized_redirect = redirect_to
+    for origin in frontend_origins:
+        if redirect_to.startswith(origin) or redirect_to == origin:
+            is_safe = True
+            break
+        if redirect_to.startswith("/"):
+            # Allow absolute paths (e.g. "/sources") — rewrite to origin 3000
+            normalized_redirect = f"http://localhost:3000{redirect_to}"
+            is_safe = True
+            break
+    if not is_safe:
+        normalized_redirect = "http://localhost:3000/dashboard"
+
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [GOOGLE_REDIRECT_URI],
             }
-        })
-        print(f"[Auth] Supabase auth response: {auth_response}")
-        if auth_response.url:
-            return RedirectResponse(url=auth_response.url)
-        raise HTTPException(status_code=500, detail="Failed to get auth URL")
-    except Exception as e:
-        print(f"[Auth] Google login error (type: {type(e).__name__}): {str(e)}")
-        import traceback
-        print(f"[Auth] Stack trace: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        },
+        scopes=GOOGLE_SCOPES,
+        redirect_uri=GOOGLE_REDIRECT_URI,
+    )
+
+    authorization_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+    )
+
+    request.session["oauth_state"] = state
+    request.session["oauth_redirect_to"] = normalized_redirect
+    return RedirectResponse(url=authorization_url)
+
 
 @router.get("/google/callback")
-async def google_callback(request: Request):
-    """Google OAuth callback (redirects to frontend)."""
+async def google_callback(request: Request, db: Session = Depends(get_db)):
+    """Handle Google OAuth2 callback, persist credentials, and redirect to frontend."""
     try:
-        # The frontend will handle this via Supabase JS SDK
-        return RedirectResponse(url="http://localhost:3000/dashboard")
-    except Exception as e:
-        print(f"[Auth] Google callback error: {str(e)}")
-        return RedirectResponse(url="http://localhost:3000/login")
+        code = request.query_params.get("code")
+        state = request.query_params.get("state")
+        stored_state = request.session.get("oauth_state")
 
-def initialize_user_workspace(db: Session, user: User):
-    """Initialize a new user's workspace."""
-    # Create graph root node
-    root_node = GraphNodeModel(
-        user_id=user.id,
-        name=f"{user.full_name}'s Memory Graph",
-        type="root",
-        description="Root node of your knowledge graph",
-    )
-    db.add(root_node)
-    db.commit()
+        if not code:
+            raise HTTPException(status_code=400, detail="Missing authorization code")
+
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [GOOGLE_REDIRECT_URI],
+                }
+            },
+            scopes=GOOGLE_SCOPES,
+            redirect_uri=GOOGLE_REDIRECT_URI,
+        )
+
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+
+        user_email = None
+        user_name = None
+        user_picture = None
+
+        if credentials.id_token:
+            try:
+                id_info = google.oauth2.id_token.verify_oauth2_token(
+                    credentials.id_token,
+                    google_requests.Request(),
+                    GOOGLE_CLIENT_ID,
+                    clock_skew_in_seconds=10,
+                )
+                user_email = id_info.get("email")
+                user_name = id_info.get("name")
+                user_picture = id_info.get("picture")
+            except Exception as e:
+                print(f"[Auth] id_token verification notice: {e}")
+
+        if not user_email:
+            import httpx
+            resp = httpx.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {credentials.token}"},
+            )
+            if resp.status_code == 200:
+                info = resp.json()
+                user_email = info.get("email")
+                user_name = info.get("name")
+                user_picture = info.get("picture")
+
+        if not user_email:
+            user_email = "google_user@evolve.ai"
+
+        user = db.query(User).filter(User.email == user_email).first()
+        if not user:
+            username = user_email.split("@")[0]
+            user = User(
+                id=str(uuid.uuid4()),
+                auth_id=str(uuid.uuid4()),
+                email=user_email,
+                full_name=user_name or username,
+                username=username,
+                avatar_url=user_picture,
+                last_login=datetime.utcnow(),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            initialize_user_workspace(db, user)
+        else:
+            user.last_login = datetime.utcnow()
+            if user_picture and not user.avatar_url:
+                user.avatar_url = user_picture
+            if user_name and not user.full_name:
+                user.full_name = user_name
+            db.commit()
+            db.refresh(user)
+
+        # Save Google tokens in GoogleCredential table
+        AuthRepository.save_credentials(
+            db=db,
+            user_id=user.id,
+            token=credentials.token,
+            refresh_token=credentials.refresh_token,
+            token_uri=credentials.token_uri,
+            client_id=GOOGLE_CLIENT_ID,
+            client_secret=GOOGLE_CLIENT_SECRET,
+            scopes=credentials.scopes,
+            expiry=credentials.expiry,
+        )
+        db.commit()
+        print(f"[Auth] Google OAuth credentials saved for user id={user.id} email={user.email} (scopes={credentials.scopes})")
+        if credentials.refresh_token:
+            print("[Auth]   (refresh token received)")
+        else:
+            print("[Auth]   WARNING: no refresh_token returned by Google. " +
+                  "Re-authorization may be needed after the access token expires. " +
+                  "If this keeps happening, choose 'Remove App Access' from your Google Account and try again.")
+
+        token = create_access_token(user)
+        request.session.pop("oauth_state", None)
+
+        # Redirect to the caller-specified page if present; fall back to dashboard
+        redirect_target = request.session.pop("oauth_redirect_to", None) or "http://localhost:3000/dashboard"
+        sep = "&" if "?" in redirect_target else "?"
+        response = RedirectResponse(url=f"{redirect_target}{sep}google_connected=1")
+        response.set_cookie(
+            key="evolve_auth_token",
+            value=token,
+            max_age=604800,
+            path="/",
+            httponly=False,
+            samesite="lax",
+        )
+        return response
+
+    except Exception as e:
+        print(f"[Auth] Google callback error: {e}")
+        import traceback
+        traceback.print_exc()
+        return RedirectResponse(url="http://localhost:3000/login?error=Google+login+failed")

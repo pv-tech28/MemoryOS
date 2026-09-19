@@ -8,6 +8,7 @@ import json
 import base64
 import traceback
 from datetime import datetime, UTC
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from google.oauth2.credentials import Credentials
@@ -72,7 +73,7 @@ def get_google_credentials(user_id: str, db) -> Credentials:
     expiry_past = expiry is not None and expiry.replace(tzinfo=None) < now_dt
     print(f"[OAuth] Checking token expiry: expiry_past={expiry_past}, google_creds.expired={google_creds.expired}")
 
-    if google_creds.expired or expiry_past:
+    if (google_creds.expired or expiry_past) and google_creds.refresh_token:
         from google.auth.transport.requests import Request as AuthRequest
         import google.auth.exceptions
         try:
@@ -120,8 +121,8 @@ def get_google_credentials(user_id: str, db) -> Credentials:
 # Pydantic model for saving provider tokens
 class SaveGoogleTokensRequest(BaseModel):
     provider_token: str
-    provider_refresh_token: str
-    scopes: list[str]
+    provider_refresh_token: Optional[str] = None
+    scopes: Optional[list[str]] = None
 
 @router.post("/google/save-tokens")
 async def save_google_tokens(
@@ -134,7 +135,7 @@ async def save_google_tokens(
     try:
         # Calculate expiry (Google access tokens are usually valid for 1 hour)
         from datetime import datetime, timedelta
-        expiry = datetime.now(UTC) + timedelta(hours=1)
+        expiry = datetime.utcnow() + timedelta(hours=1)
         # Google's token URI
         token_uri = "https://oauth2.googleapis.com/token"
         
@@ -147,7 +148,11 @@ async def save_google_tokens(
             token_uri=token_uri,
             client_id=os.getenv("GOOGLE_CLIENT_ID"),
             client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-            scopes=request.scopes,
+            scopes=request.scopes or [
+                "https://www.googleapis.com/auth/gmail.readonly",
+                "https://www.googleapis.com/auth/drive.readonly",
+                "https://www.googleapis.com/auth/calendar.readonly",
+            ],
             expiry=expiry,
         )
         db.commit()
@@ -239,8 +244,7 @@ async def sync_gmail(
                 add_document(doc_id, chunk_texts, embeddings, metadatas)
                 print(f"[Gmail Sync] Added document to vector store with ID {doc_id}")
                 
-                # Update metadata in PostgreSQL
-                db = SessionLocal()
+                # Update metadata in database
                 try:
                     DocumentRepository.create(
                         db=db,
@@ -251,8 +255,8 @@ async def sync_gmail(
                         chunk_count=len(chunks),
                         file_size=len(content.encode("utf-8")),
                         status="ready",
-                        metadata={},
-                        user_id="default_user",
+                        metadata={"subject": subject, "from": from_addr, "date": date, "msg_id": msg["id"]},
+                        user_id=current_user.id,
                     )
                     db_chunks = [
                         {
@@ -264,36 +268,38 @@ async def sync_gmail(
                     ]
                     DocumentRepository.create_chunks(db, doc_id, db_chunks)
                     db.commit()
-                    print(f"[Gmail Sync] Saved document metadata to PostgreSQL")
+                    print(f"[Gmail Sync] Saved document metadata to database for user {current_user.id}")
                 except Exception as e:
                     db.rollback()
                     print(f"[Gmail Sync] Error saving doc metadata to DB: {e}")
                     traceback.print_exc()
-                finally:
-                    db.close()
                 
                 # Add to knowledge graph with enhanced email node
-                recipients = next((h["value"] for h in headers if h["name"] == "To"), "")
-                email_node = EntityNode(
-                    name=f"Email - {subject}",
-                    type="Email",
-                    description=f"From: {from_addr}\nTo: {recipients}\nDate: {date}",
-                    metadata={
-                        "source": "gmail",
-                        "subject": subject,
-                        "from": from_addr,
-                        "to": recipients,
-                        "date": date,
-                        "msg_id": msg["id"]
-                    }
-                )
-                graph_service.process_text(
-                    text=content,
-                    source_node=email_node,
-                    context={"type": "email", "source": "gmail", "msg_id": msg["id"], "user_id": "default_user"},
-                    user_id="default_user"
-                )
-                print(f"[Gmail Sync] Added email to knowledge graph")
+                try:
+                    recipients = next((h["value"] for h in headers if h["name"] == "To"), "")
+                    email_node = EntityNode(
+                        name=f"Email - {subject}",
+                        type="Email",
+                        description=f"From: {from_addr}\nTo: {recipients}\nDate: {date}",
+                        metadata={
+                            "source": "gmail",
+                            "subject": subject,
+                            "from": from_addr,
+                            "to": recipients,
+                            "date": date,
+                            "msg_id": msg["id"]
+                        }
+                    )
+                    graph_service.process_text(
+                        text=content,
+                        user_id=current_user.id,
+                        source_node=email_node,
+                        context={"type": "email", "source": "gmail", "msg_id": msg["id"], "user_id": current_user.id},
+                        doc_id=doc_id,
+                    )
+                    print(f"[Gmail Sync] Added email to knowledge graph")
+                except Exception as graph_err:
+                    print(f"[Gmail Sync] Knowledge graph extraction error for email {msg['id']}: {graph_err}")
             except Exception as e:
                 print(f"[Gmail Sync] Error processing message {msg['id']}: {e}")
                 traceback.print_exc()
@@ -302,6 +308,8 @@ async def sync_gmail(
         
         print(f"[Gmail Sync] Sync completed successfully! Synced {len(messages)} messages")
         return {"status": "success", "message": f"Synced {len(messages)} emails from Gmail"}
+    except HTTPException:
+        raise
     except Exception as e:
         print("-" * 50)
         print("[Gmail Sync] ERROR: Sync failed!")
@@ -337,104 +345,136 @@ async def sync_drive(
         print(f"[Drive Sync] Found {len(files)} files to process")
         graph_service = get_graph_service()
         
+        synced_count = 0
         for i, file in enumerate(files):
             print(f"[Drive Sync] Processing file {i+1}/{len(files)} (ID: {file['id']}, Name: {file['name']})")
             try:
-                if file["mimeType"] == "application/pdf":
+                mime = file.get("mimeType", "")
+                text = ""
+                file_size = 0
+
+                # 1. Google Docs (native cloud format - export to text)
+                if mime == "application/vnd.google-apps.document":
+                    print(f"[Drive Sync]   It's a Google Doc, exporting as text...")
+                    req = service.files().export_media(fileId=file["id"], mimeType="text/plain")
+                    content_bytes = req.execute()
+                    text = content_bytes.decode("utf-8", errors="ignore")
+                    file_size = len(content_bytes)
+
+                # 2. PDF Files
+                elif mime == "application/pdf":
                     print(f"[Drive Sync]   It's a PDF, downloading...")
-                    # Download PDF file
-                    request = service.files().get_media(fileId=file["id"])
-                    file_content = request.execute()
+                    req = service.files().get_media(fileId=file["id"])
+                    file_content = req.execute()
+                    file_size = int(file.get("size", len(file_content)))
                     print(f"[Drive Sync]   Downloaded {len(file_content)} bytes")
-                    
-                    # Extract text from PDF
                     text = extract_text_from_pdf_bytes(file_content)
-                    if not text.strip():
-                        print(f"[Drive Sync]   No text found in PDF, skipping")
-                        continue
-                    
-                    print(f"[Drive Sync]   Extracted {len(text)} characters of text")
-                    
-                    # Process and add to vector store
-                    chunks = chunk_text(text)
-                    chunk_texts = [c.text for c in chunks]
-                    embeddings = embed_texts(chunk_texts)
-                    
-                    doc_id = f"drive_{file['id']}"
-                    metadatas = [
+
+                # 3. Plain Text, Markdown, CSV, JSON, or code files
+                elif mime.startswith("text/") or mime in ("application/json", "application/csv"):
+                    print(f"[Drive Sync]   It's a text/data file, downloading...")
+                    req = service.files().get_media(fileId=file["id"])
+                    file_content = req.execute()
+                    file_size = len(file_content)
+                    text = file_content.decode("utf-8", errors="ignore")
+
+                else:
+                    print(f"[Drive Sync]   Unsupported mimeType: {mime}, skipping")
+                    continue
+
+                if not text or not text.strip():
+                    print(f"[Drive Sync]   No text found in file {file['name']}, skipping")
+                    continue
+                
+                print(f"[Drive Sync]   Extracted {len(text)} characters of text")
+                
+                # Process and add to vector store
+                chunks = chunk_text(text)
+                if not chunks:
+                    continue
+                chunk_texts = [c.text for c in chunks]
+                embeddings = embed_texts(chunk_texts)
+                
+                doc_id = f"drive_{file['id']}"
+                metadatas = [
+                    {
+                        "document_name": file["name"],
+                        "page_number": getattr(c, "page_number", 1) or 1,
+                        "chunk_index": idx,
+                        "source": "drive",
+                        "user_id": current_user.id,
+                    }
+                    for idx, c in enumerate(chunks)
+                ]
+                add_document(doc_id, chunk_texts, embeddings, metadatas)
+                print(f"[Drive Sync]   Added document to vector store with ID {doc_id}")
+                
+                # Update metadata in database
+                try:
+                    DocumentRepository.create(
+                        db=db,
+                        doc_id=doc_id,
+                        filename=file["name"],
+                        source="drive",
+                        page_count=1,
+                        chunk_count=len(chunks),
+                        file_size=file_size,
+                        status="ready",
+                        metadata={"drive_id": file["id"], "mime_type": mime},
+                        user_id=current_user.id,
+                    )
+                    db_chunks = [
                         {
-                            "document_name": file["name"],
-                            "page_number": 1,
-                            "chunk_index": i,
-                            "source": "drive",
+                            "chunk_index": c.chunk_index,
+                            "page_number": c.page_number or 1,
+                            "content": c.text,
                         }
-                        for i, _ in enumerate(chunks)
+                        for c in chunks
                     ]
-                    add_document(doc_id, chunk_texts, embeddings, metadatas)
-                    print(f"[Drive Sync]   Added document to vector store with ID {doc_id}")
-                    
-                    # Update metadata in PostgreSQL
-                    db = SessionLocal()
-                    try:
-                        DocumentRepository.create(
-                            db=db,
-                            doc_id=doc_id,
-                            filename=file["name"],
-                            source="drive",
-                            page_count=1,
-                            chunk_count=len(chunks),
-                            file_size=int(file.get("size", len(file_content))),
-                            status="ready",
-                            metadata={},
-                            user_id="default_user",
-                        )
-                        db_chunks = [
-                            {
-                                "chunk_index": c.chunk_index,
-                                "page_number": c.page_number or 1,
-                                "content": c.text,
-                            }
-                            for c in chunks
-                        ]
-                        DocumentRepository.create_chunks(db, doc_id, db_chunks)
-                        db.commit()
-                        print(f"[Drive Sync]   Saved document metadata to PostgreSQL")
-                    except Exception as e:
-                        db.rollback()
-                        print(f"[Drive Sync]   Error saving doc metadata to DB: {e}")
-                        traceback.print_exc()
-                    finally:
-                        db.close()
-                    
-                    # Add to knowledge graph with enhanced drive document node
+                    DocumentRepository.create_chunks(db, doc_id, db_chunks)
+                    db.commit()
+                    print(f"[Drive Sync]   Saved document metadata to database for user {current_user.id}")
+                except Exception as e:
+                    db.rollback()
+                    print(f"[Drive Sync]   Error saving doc metadata to DB: {e}")
+                    traceback.print_exc()
+                
+                # Add to knowledge graph with enhanced drive document node
+                try:
                     doc_node = EntityNode(
                         name=file["name"],
                         type="Document",
-                        description=f"Document from Google Drive\nMime Type: {file['mimeType']}",
+                        description=f"Document from Google Drive\nMime Type: {mime}",
                         metadata={
                             "source": "drive",
                             "name": file["name"],
-                            "mime_type": file["mimeType"],
+                            "mime_type": mime,
                             "drive_id": file["id"],
                             "created_time": file.get("createdTime", "")
                         }
                     )
                     graph_service.process_text(
                         text=text,
+                        user_id=current_user.id,
                         source_node=doc_node,
-                        context={"type": "document", "source": "drive", "drive_id": file["id"], "user_id": "default_user"},
-                        user_id="default_user"
+                        context={"type": "document", "source": "drive", "drive_id": file["id"], "user_id": current_user.id},
+                        doc_id=doc_id,
                     )
                     print(f"[Drive Sync]   Added document to knowledge graph")
-                else:
-                    print(f"[Drive Sync]   Not a PDF (mimeType: {file['mimeType']}), skipping")
+                except Exception as graph_err:
+                    print(f"[Drive Sync]   Knowledge graph extraction error for file {file['id']}: {graph_err}")
+
+                synced_count += 1
+
             except Exception as e:
                 print(f"[Drive Sync] Error processing file {file['id']}: {e}")
                 traceback.print_exc()
                 continue
         
-        print(f"[Drive Sync] Sync completed! Processed {len(files)} files")
-        return {"status": "success", "message": f"Synced {len(files)} files from Drive"}
+        print(f"[Drive Sync] Sync completed! Processed {synced_count} files")
+        return {"status": "success", "message": f"Synced {synced_count} files from Drive"}
+    except HTTPException:
+        raise
     except Exception as e:
         print("-" * 50)
         print("[Drive Sync] ERROR: Sync failed!")
@@ -503,8 +543,7 @@ async def sync_calendar(
                 add_document(doc_id, chunk_texts, embeddings, metadatas)
                 print(f"[Calendar Sync]   Added event to vector store with ID {doc_id}")
                 
-                # Update metadata in PostgreSQL
-                db = SessionLocal()
+                # Update metadata in database
                 try:
                     DocumentRepository.create(
                         db=db,
@@ -515,8 +554,8 @@ async def sync_calendar(
                         chunk_count=len(chunks),
                         file_size=len(content.encode("utf-8")),
                         status="ready",
-                        metadata={},
-                        user_id="default_user",
+                        metadata={"start": start, "end": end, "location": location, "event_id": event["id"]},
+                        user_id=current_user.id,
                     )
                     db_chunks = [
                         {
@@ -528,38 +567,38 @@ async def sync_calendar(
                     ]
                     DocumentRepository.create_chunks(db, doc_id, db_chunks)
                     db.commit()
-                    print(f"[Calendar Sync]   Saved event metadata to PostgreSQL")
+                    print(f"[Calendar Sync]   Saved event metadata to database for user {current_user.id}")
                 except Exception as e:
                     db.rollback()
                     print(f"[Calendar Sync]   Error saving event metadata to DB: {e}")
                     traceback.print_exc()
-                finally:
-                    db.close()
                 
                 # Add to knowledge graph with enhanced calendar event node
-                location = event.get("location", "")
-                participants = [attendee.get("email", "") for attendee in event.get("attendees", [])]
-                event_node = EntityNode(
-                    name=summary,
-                    type="Event",
-                    description=f"Calendar event\nStart: {start}\nEnd: {end}\nLocation: {location}",
-                    metadata={
-                        "source": "calendar",
-                        "summary": summary,
-                        "start": start,
-                        "end": end,
-                        "location": location,
-                        "participants": participants,
-                        "event_id": event["id"]
-                    }
-                )
-                graph_service.process_text(
-                    text=content,
-                    source_node=event_node,
-                    context={"type": "event", "source": "calendar", "event_id": event["id"], "user_id": "default_user"},
-                    user_id="default_user"
-                )
-                print(f"[Calendar Sync]   Added event to knowledge graph")
+                try:
+                    event_node = EntityNode(
+                        name=summary,
+                        type="Event",
+                        description=f"Calendar event\nStart: {start}\nEnd: {end}\nLocation: {location}",
+                        metadata={
+                            "source": "calendar",
+                            "summary": summary,
+                            "start": start,
+                            "end": end,
+                            "location": location,
+                            "participants": participants,
+                            "event_id": event["id"]
+                        }
+                    )
+                    graph_service.process_text(
+                        text=content,
+                        user_id=current_user.id,
+                        source_node=event_node,
+                        context={"type": "event", "source": "calendar", "event_id": event["id"], "user_id": current_user.id},
+                        doc_id=doc_id,
+                    )
+                    print(f"[Calendar Sync]   Added event to knowledge graph")
+                except Exception as graph_err:
+                    print(f"[Calendar Sync]   Knowledge graph extraction error for event {event['id']}: {graph_err}")
             except Exception as e:
                 print(f"[Calendar Sync] Error processing event {event['id']}: {e}")
                 traceback.print_exc()
@@ -567,6 +606,8 @@ async def sync_calendar(
         
         print(f"[Calendar Sync] Sync completed! Processed {len(events)} events")
         return {"status": "success", "message": f"Synced {len(events)} events from Calendar"}
+    except HTTPException:
+        raise
     except Exception as e:
         print("-" * 50)
         print("[Calendar Sync] ERROR: Sync failed!")

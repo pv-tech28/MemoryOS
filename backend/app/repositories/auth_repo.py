@@ -66,11 +66,42 @@ class AuthRepository:
         db: Session, user_id: str = DEFAULT_USER_ID
     ) -> Optional[Dict[str, Any]]:
         """Get Google credentials for a user as a dict."""
+        from app.models.db_models import User
         cred = (
             db.query(GoogleCredential)
             .filter(GoogleCredential.user_id == user_id)
             .first()
         )
+        if not cred and user_id:
+            user = db.query(User).filter((User.id == user_id) | (User.auth_id == user_id)).first()
+            if user:
+                cred = db.query(GoogleCredential).filter(
+                    (GoogleCredential.user_id == user.id) |
+                    (GoogleCredential.user_id == user.auth_id)
+                ).first()
+        if not cred and user_id != DEFAULT_USER_ID:
+            cred = (
+                db.query(GoogleCredential)
+                .filter(GoogleCredential.user_id == DEFAULT_USER_ID)
+                .first()
+            )
+            # Auto-link to user_id so future queries find it directly
+            if cred and user_id:
+                try:
+                    AuthRepository.save_credentials(
+                        db=db,
+                        user_id=user_id,
+                        token=cred.token,
+                        refresh_token=cred.refresh_token,
+                        token_uri=cred.token_uri,
+                        client_id=cred.client_id,
+                        client_secret=cred.client_secret,
+                        scopes=cred.scopes,
+                        expiry=cred.expiry,
+                    )
+                    db.commit()
+                except Exception:
+                    db.rollback()
         if not cred:
             return None
         return {
@@ -86,12 +117,28 @@ class AuthRepository:
     @staticmethod
     def has_credentials(db: Session, user_id: str = DEFAULT_USER_ID) -> bool:
         """Check if user has stored Google credentials."""
-        return (
+        from app.models.db_models import User
+        has = (
             db.query(GoogleCredential)
             .filter(GoogleCredential.user_id == user_id)
             .first()
             is not None
         )
+        if not has and user_id:
+            user = db.query(User).filter((User.id == user_id) | (User.auth_id == user_id)).first()
+            if user:
+                has = db.query(GoogleCredential).filter(
+                    (GoogleCredential.user_id == user.id) |
+                    (GoogleCredential.user_id == user.auth_id)
+                ).first() is not None
+        if not has and user_id != DEFAULT_USER_ID:
+            has = (
+                db.query(GoogleCredential)
+                .filter(GoogleCredential.user_id == DEFAULT_USER_ID)
+                .first()
+                is not None
+            )
+        return has
 
     @staticmethod
     def delete_credentials(db: Session, user_id: str = DEFAULT_USER_ID) -> bool:
