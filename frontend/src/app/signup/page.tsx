@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, EyeOff, Loader2, Brain } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Brain, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function SignupPage() {
@@ -16,7 +16,7 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { signUp, signInWithGoogle } = useAuth();
+  const { signUp, signInWithGoogle, signInAsDemoUser } = useAuth();
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -32,6 +32,19 @@ export default function SignupPage() {
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Signup failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await signInAsDemoUser();
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Demo login failed');
     } finally {
       setLoading(false);
     }
@@ -154,10 +167,43 @@ export default function SignupPage() {
             </h2>
 
             {error && (
-              <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                {error}
+              <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm space-y-2.5">
+                <div className="flex items-start gap-2">
+                  <span className="text-red-400 font-semibold">Note:</span>
+                  <span>
+                    {error === 'AUTH_SERVER_UNREACHABLE' || error.includes('fetch')
+                      ? 'Authentication service is unreachable. The Supabase backend may be paused or unconfigured.'
+                      : error}
+                  </span>
+                </div>
+                {(error === 'AUTH_SERVER_UNREACHABLE' || error.includes('fetch')) && (
+                  <div className="pt-2 border-t border-red-500/20">
+                    <p className="text-xs text-gray-300 mb-2">
+                      You can instantly explore the application using Demo Mode:
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleDemoLogin}
+                      disabled={loading}
+                      className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-md"
+                    >
+                      <Sparkles size={14} /> Enter in Demo Mode
+                    </button>
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Quick Demo Access */}
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              disabled={loading}
+              className="w-full mb-4 flex items-center justify-center gap-2.5 p-3 rounded-xl bg-gradient-to-r from-purple-600/25 via-indigo-600/20 to-purple-600/25 border border-purple-500/30 text-purple-200 font-semibold hover:border-purple-400 hover:bg-purple-600/35 hover:text-white transition-all shadow-lg hover:shadow-purple-500/10 disabled:opacity-50"
+            >
+              <Sparkles size={18} className="text-purple-400" />
+              <span>Explore with Demo Account (Instant Access)</span>
+            </button>
 
             {/* Google Login */}
             <button

@@ -25,7 +25,8 @@ export default function ProfileSettingsPage() {
       setUsername(p.username || "");
       setBio(p.bio || "");
       if (p.profile_picture_url) {
-        setImagePreview(`http://localhost:8000${p.profile_picture_url}`);
+        const backendBase = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, "") : "http://localhost:8000";
+        setImagePreview(`${backendBase}${p.profile_picture_url}`);
       }
     }
     fetchData();
