@@ -78,11 +78,12 @@ def get_memories_by_chat_id(
     chat_id: str,
     limit: Optional[int] = None,
     min_importance: float = 0.0,
+    user_id: Optional[str] = "demo-user-id",
 ) -> List[Dict[str, Any]]:
     """Retrieve memories for a specific chat."""
     db = _get_db()
     try:
-        result = MemoryRepository.get_by_chat_id(db, chat_id, limit, min_importance)
+        result = MemoryRepository.get_by_chat_id(db, chat_id, limit, min_importance, user_id=user_id)
         db.commit()
         return result
     finally:
@@ -92,7 +93,7 @@ def get_memories_by_chat_id(
 def get_relevant_memories(
     query_text: str,
     chat_id: Optional[str] = None,
-    user_id: str = "default_user",
+    user_id: str = "demo-user-id",
     limit: int = 10,
     min_importance: float = 0.3,
 ) -> List[Dict[str, Any]]:
@@ -130,7 +131,7 @@ def update_memory(
 def find_existing_memory(
     memory_text: str,
     memory_type: str,
-    user_id: str = "default_user",
+    user_id: str = "demo-user-id",
 ) -> Optional[Dict[str, Any]]:
     """Find an existing memory by similarity for deduplication."""
     db = _get_db()
@@ -140,7 +141,7 @@ def find_existing_memory(
         db.close()
 
 
-def delete_memory(memory_id: str, user_id: str = "default_user") -> bool:
+def delete_memory(memory_id: str, user_id: str = "demo-user-id") -> bool:
     """Delete a memory by ID."""
     db = _get_db()
     try:
@@ -154,7 +155,7 @@ def delete_memory(memory_id: str, user_id: str = "default_user") -> bool:
         db.close()
 
 
-def get_all_memories(user_id: str = "default_user") -> List[Dict[str, Any]]:
+def get_all_memories(user_id: str = "demo-user-id") -> List[Dict[str, Any]]:
     """Get all memories from the database."""
     db = _get_db()
     try:

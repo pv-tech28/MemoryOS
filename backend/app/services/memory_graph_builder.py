@@ -81,12 +81,13 @@ class GraphService:
         """Initialize GraphService — load per-user graphs on demand."""
         self._graphs: Dict[str, nx.DiGraph] = {}
 
-    def _get_or_load_graph(self, user_id: str) -> nx.DiGraph:
+    def _get_or_load_graph(self, user_id: str = "demo-user-id") -> nx.DiGraph:
         """Get the graph for a user, loading from DB if not cached."""
-        if user_id not in self._graphs:
-            self._graphs[user_id] = nx.DiGraph()
-            self._load_from_db(user_id)
-        return self._graphs[user_id]
+        effective_uid = "demo-user-id" if user_id in ("default_user", None, "") else user_id
+        if effective_uid not in self._graphs:
+            self._graphs[effective_uid] = nx.DiGraph()
+            self._load_from_db(effective_uid)
+        return self._graphs[effective_uid]
 
     def _load_from_db(self, user_id: str) -> None:
         """Load graph for a specific user from PostgreSQL."""
@@ -409,7 +410,7 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         edges_data = [RelationshipEdge(**data) for _, _, data in subgraph.edges(data=True)]
         return {"nodes": nodes_data, "edges": edges_data}
 
-    def search_nodes(self, query: str, user_id: str, entity_type: Optional[str] = None) -> List[EntityNode]:
+    def search_nodes(self, query: str, user_id: str = "demo-user-id", entity_type: Optional[str] = None) -> List[EntityNode]:
         """Search nodes for a specific user."""
         query_lower = query.lower()
         results = []
@@ -423,17 +424,17 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         results.sort(key=lambda n: (0 if n.name.lower() == query_lower else 1, -n.importance))
         return results
 
-    def get_all_nodes(self, user_id: str) -> List[EntityNode]:
+    def get_all_nodes(self, user_id: str = "demo-user-id") -> List[EntityNode]:
         """Get all nodes for a specific user."""
         graph = self._get_or_load_graph(user_id)
         return [EntityNode(**data) for _, data in graph.nodes(data=True)]
 
-    def get_all_edges(self, user_id: str) -> List[RelationshipEdge]:
+    def get_all_edges(self, user_id: str = "demo-user-id") -> List[RelationshipEdge]:
         """Get all edges for a specific user."""
         graph = self._get_or_load_graph(user_id)
         return [RelationshipEdge(**data) for _, _, data in graph.edges(data=True)]
 
-    def increment_importance(self, node_id: str, user_id: str, amount: float = 0.1) -> None:
+    def increment_importance(self, node_id: str, user_id: str = "demo-user-id", amount: float = 0.1) -> None:
         graph = self._get_or_load_graph(user_id)
         if node_id not in graph.nodes:
             return
@@ -449,7 +450,7 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         finally:
             db.close()
 
-    def decay_importance(self, user_id: str, decay_rate: float = 0.01) -> None:
+    def decay_importance(self, user_id: str = "demo-user-id", decay_rate: float = 0.01) -> None:
         graph = self._get_or_load_graph(user_id)
         for node_id, data in graph.nodes(data=True):
             current = data.get("importance", 0.5)
@@ -464,7 +465,7 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         finally:
             db.close()
 
-    def increment_node_importance(self, node_id: str, user_id: str, amount: float = 0.05) -> None:
+    def increment_node_importance(self, node_id: str, user_id: str = "demo-user-id", amount: float = 0.05) -> None:
         graph = self._get_or_load_graph(user_id)
         if node_id in graph.nodes:
             current = graph.nodes[node_id].get("importance", 0.5)
@@ -480,7 +481,7 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
             finally:
                 db.close()
 
-    def get_smart_recommendations(self, user_id: str, limit: int = 10) -> List[EntityNode]:
+    def get_smart_recommendations(self, user_id: str = "demo-user-id", limit: int = 10) -> List[EntityNode]:
         graph = self._get_or_load_graph(user_id)
         nodes = []
         for node_id, data in graph.nodes(data=True):
@@ -502,7 +503,7 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         nodes.sort(key=score, reverse=True)
         return nodes[:limit]
 
-    def find_path(self, source_id: str, target_id: str, user_id: str) -> Optional[List[str]]:
+    def find_path(self, source_id: str, target_id: str, user_id: str = "demo-user-id") -> Optional[List[str]]:
         try:
             graph = self._get_or_load_graph(user_id)
             path = nx.shortest_path(graph, source=source_id, target=target_id)
@@ -510,7 +511,7 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
         except Exception:
             return None
 
-    def get_community_detection(self, user_id: str) -> List[List[str]]:
+    def get_community_detection(self, user_id: str = "demo-user-id") -> List[List[str]]:
         graph = self._get_or_load_graph(user_id)
         if len(graph.nodes()) < 2:
             return []
@@ -530,7 +531,7 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
             print(f"[GraphService] Community detection error: {e}")
             return []
 
-    def get_central_nodes(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def get_central_nodes(self, user_id: str = "demo-user-id", limit: int = 5) -> List[Dict[str, Any]]:
         graph = self._get_or_load_graph(user_id)
         if len(graph.nodes()) < 2:
             return []
@@ -551,12 +552,12 @@ If no entities/relationships, return {{ "entities": [], "relationships": [] }}
             print(f"[GraphService] Centrality error: {e}")
             return []
 
-    def clear_graph(self, user_id: str):
+    def clear_graph(self, user_id: str = "demo-user-id"):
         if user_id in self._graphs:
             del self._graphs[user_id]
         print(f"[GraphService] In-memory graph cleared for user {user_id}")
 
-    def get_stats(self, user_id: str) -> Dict[str, Any]:
+    def get_stats(self, user_id: str = "demo-user-id") -> Dict[str, Any]:
         graph = self._get_or_load_graph(user_id)
         total_nodes = graph.number_of_nodes()
         total_edges = graph.number_of_edges()
@@ -656,27 +657,27 @@ def update_graph_from_memory(memory_text: str, memory_type: str, user_id: str = 
         print(f"[update_graph_from_memory] Error: {e}")
 
 
-def get_all_graph_nodes(user_id: str):
+def get_all_graph_nodes(user_id: str = "demo-user-id"):
     """Wrapper to get all nodes from graph service."""
     service = get_graph_service()
     nodes = service.get_all_nodes(user_id)
     return [node.model_dump() for node in nodes]
 
 
-def get_all_graph_edges(user_id: str):
+def get_all_graph_edges(user_id: str = "demo-user-id"):
     """Wrapper to get all edges from graph service."""
     service = get_graph_service()
     edges = service.get_all_edges(user_id)
     return [edge.model_dump() for edge in edges]
 
 
-def get_graph_stats(user_id: str):
+def get_graph_stats(user_id: str = "demo-user-id"):
     """Wrapper to get stats from graph service."""
     service = get_graph_service()
     return service.get_stats(user_id)
 
 
-def get_related_memories(entity_name: str, user_id: str):
+def get_related_memories(entity_name: str, user_id: str = "demo-user-id"):
     """Get related memories for an entity."""
     service = get_graph_service()
     node = None

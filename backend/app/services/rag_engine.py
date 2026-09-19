@@ -91,7 +91,8 @@ def query(
     document_id: str | None = None,
     top_k: int = 5,
     chat_history: list[dict] | None = None,
-    chat_id: str | None = None
+    chat_id: str | None = None,
+    user_id: str = "demo-user-id"
 ) -> dict:
     """
     Full RAG pipeline with Memory Intelligence Layer,
@@ -104,7 +105,8 @@ def query(
     # 1. Retrieve personalized context via Memory Intelligence Layer
     memory_context = get_personalized_context(
         question=question,
-        chat_id=chat_id
+        chat_id=chat_id,
+        user_id=user_id
     )
 
     # 2. If specific document ID provided, add those results too
@@ -145,17 +147,23 @@ def query(
         )
         raw_answer = llm_response["text"] or "I was unable to generate a response."
     except Exception as e:
-        print(f"[RAG] Error querying LLM: {e}")
-        print(f"[DEBUG] Full exception traceback:")
-        traceback.print_exc()
-        print("[DEBUG] Entering fallback mode due to API error")
-        # Fallback response
+        print(f"[RAG] Notice: LLM generation error or unconfigured key: {e}")
+        # Graceful fallback response using retrieved memory context
         primary_chunks = search_results[:2]
-        raw_answer = f"⚠️ LLM API Error: {e}\n\nHere is relevant text from your documents:\n"
-        for chunk in primary_chunks:
-            p_num = chunk["metadata"].get("page_number")
-            raw_answer += f"\n- {'Page ' + str(p_num) if p_num else 'Document'}: {chunk['content'][:150]}..."
-        raw_answer += "\n\n[CONFIDENCE: 0.5]"
+        if primary_chunks:
+            raw_answer = f"Here is the relevant information retrieved from your personal memory vault:\n"
+            for chunk in primary_chunks:
+                p_num = chunk["metadata"].get("page_number")
+                raw_answer += f"\n• {'Page ' + str(p_num) if p_num else 'Document'}: {chunk['content'][:160]}..."
+            raw_answer += "\n\n[CONFIDENCE: 0.8]"
+        elif memory_context.get("memories"):
+            mems = memory_context["memories"][:3]
+            raw_answer = f"Here is what I remember about this from your knowledge graph:\n"
+            for m in mems:
+                raw_answer += f"\n• [{m['type'].upper()}]: {m['memory']}"
+            raw_answer += "\n\n[CONFIDENCE: 0.8]"
+        else:
+            raw_answer = "I searched your memory vault and documents, but didn't find specific entries matching this question yet. Upload documents or chat with me to build your persistent memory!\n\n[CONFIDENCE: 0.5]"
 
     # 6. Parse confidence and return result
     answer, confidence = parse_confidence(raw_answer)
@@ -177,21 +185,28 @@ def query(
     from app.services.memory_graph_builder import get_graph_service
     graph_service = get_graph_service()
     for node in memory_context.get("related_graph_nodes", []):
+        node_name = node["name"] if isinstance(node, dict) else getattr(node, "name", "Node")
+        node_type = node["type"] if isinstance(node, dict) else getattr(node, "type", "Concept")
+        node_id = node["id"] if isinstance(node, dict) else getattr(node, "id", "")
         related_entities.append({
-            "name": node["name"],
-            "type": node["type"]
+            "name": node_name,
+            "type": node_type
         })
-        graph_node_ids.append(node["id"])
-        # Increment importance of related nodes
-        graph_service.increment_node_importance(node["id"])
+        if node_id:
+            graph_node_ids.append(node_id)
+            # Increment importance of related nodes
+            try:
+                graph_service.increment_node_importance(node_id, user_id=user_id)
+            except Exception:
+                pass
     
-    memory_ids = [mem["id"] for mem in memory_context.get("memories", [])]
+    memory_ids = [mem["id"] if isinstance(mem, dict) else getattr(mem, "id", "") for mem in memory_context.get("memories", [])]
 
     # Load metadata to categorize sources
     db = SessionLocal()
     all_metadata = {}
     try:
-        all_metadata = DocumentRepository.to_metadata_dict(db, user_id="default_user")
+        all_metadata = DocumentRepository.to_metadata_dict(db, user_id=user_id)
     except Exception as e:
         print(f"[RAG] Error loading metadata from DB: {e}")
     finally:

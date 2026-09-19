@@ -14,7 +14,7 @@ from app.services.memory_graph_builder import get_graph_service
 def get_personalized_context(
     question: str,
     chat_id: Optional[str] = None,
-    user_id: str = "default"
+    user_id: str = "demo-user-id"
 ) -> Dict[str, Any]:
     """
     Get all personalized context for a question including:
@@ -26,13 +26,15 @@ def get_personalized_context(
     memories = get_relevant_memories(
         query_text=question,
         chat_id=chat_id,
+        user_id=user_id,
         limit=15,
         min_importance=0.3
     )
     
     # 2. Retrieve related graph nodes
     graph_service = get_graph_service()
-    related_nodes = graph_service.search_nodes(question)
+    raw_nodes = graph_service.search_nodes(question, user_id=user_id)
+    related_nodes = [n.model_dump() if hasattr(n, "model_dump") else n for n in raw_nodes]
     
     # 3. Retrieve vector search results
     query_embedding = embed_query(question)
