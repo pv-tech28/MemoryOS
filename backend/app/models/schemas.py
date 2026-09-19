@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -151,19 +151,43 @@ class MemoryListResponse(BaseModel):
 class GraphNode(BaseModel):
     id: str
     name: str
-    type: str
+    type: str = "concept"
     description: Optional[str] = None
-    created_at: str
-    updated_at: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    class Config:
+        extra = "allow"
 
 
 class GraphEdge(BaseModel):
     id: str
-    source_node_id: str
-    target_node_id: str
-    type: str
+    source_node_id: Optional[str] = None
+    target_node_id: Optional[str] = None
+    source_id: Optional[str] = None
+    target_id: Optional[str] = None
+    source: Optional[str] = None
+    target: Optional[str] = None
+    type: str = "related_to"
     description: Optional[str] = None
-    created_at: str
+    created_at: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_ids(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            s = data.get("source_node_id") or data.get("source_id") or data.get("source")
+            t = data.get("target_node_id") or data.get("target_id") or data.get("target")
+            data["source_node_id"] = s
+            data["target_node_id"] = t
+            data["source_id"] = s
+            data["target_id"] = t
+            data["source"] = s
+            data["target"] = t
+        return data
 
 
 class GraphData(BaseModel):

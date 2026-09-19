@@ -5,7 +5,7 @@ Uses SQLAlchemy 2.0 with PostgreSQL (Supabase).
 
 import os
 from pathlib import Path
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
 from dotenv import load_dotenv
 
@@ -40,7 +40,7 @@ IS_SQLITE = DATABASE_URL.startswith("sqlite")
 # Engine configuration
 engine_kwargs = {}
 if IS_SQLITE:
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
+    engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 else:
     engine_kwargs["pool_size"] = 5
     engine_kwargs["max_overflow"] = 10
@@ -49,6 +49,14 @@ else:
     engine_kwargs["pool_pre_ping"] = True
 
 engine = create_engine(DATABASE_URL, echo=False, **engine_kwargs)
+
+if IS_SQLITE:
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

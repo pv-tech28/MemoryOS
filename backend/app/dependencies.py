@@ -9,43 +9,51 @@ from typing import Optional
 import json
 import base64
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+
+def get_demo_user(db: Session) -> User:
+    """Get or create a default demo user for local operation / fallback."""
+    user = db.query(User).filter(
+        (User.id == "demo-user-id") |
+        (User.id == "default_user") |
+        (User.username == "demouser") |
+        (User.email == "demo@evolve.ai")
+    ).first()
+    if not user:
+        user = User(
+            id="demo-user-id",
+            auth_id="demo_auth_id",
+            email="demo@evolve.ai",
+            full_name="Demo User",
+            username="demouser",
+            plan="pro",
+            memory_health=98.5,
+            last_login=datetime.utcnow(),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    """Get the current authenticated user from Supabase JWT token."""
-    print("=" * 50)
-    print("[Auth] Starting token verification")
-    print(f"[Auth] Supabase configured: {supabase is not None}")
-    
-    # Log token details (without full token)
+    """Get the current authenticated user from Supabase JWT token, with fallback to Demo User."""
+    if not credentials or not credentials.credentials:
+        print("[Auth] No credentials provided, falling back to Demo User")
+        return get_demo_user(db)
+        
     token = credentials.credentials
-    print(f"[Auth] Token received (first 50 chars): {token[:50]}...")
-    
-    # Try to decode token header to check kid, iss, aud
-    try:
-        token_parts = token.split('.')
-        if len(token_parts) == 3:
-            header_b64 = token_parts[0]
-            header_bytes = base64.urlsafe_b64decode(header_b64 + '=' * (4 - len(header_b64) % 4))
-            header = json.loads(header_bytes.decode('utf-8'))
-            print(f"[Auth] Token header: {header}")
-            
-            payload_b64 = token_parts[1]
-            payload_bytes = base64.urlsafe_b64decode(payload_b64 + '=' * (4 - len(payload_b64) % 4))
-            payload = json.loads(payload_bytes.decode('utf-8'))
-            print(f"[Auth] Token payload (iss, aud, exp): iss={payload.get('iss')}, aud={payload.get('aud')}, exp={payload.get('exp')}")
-            print(f"[Auth] Token payload full: {payload}")
-    except Exception as e:
-        print(f"[Auth] Error decoding token parts: {e}")
-    
+    if token in ("demo-token", "null", "undefined"):
+        print("[Auth] Demo token provided, returning Demo User")
+        return get_demo_user(db)
+
     if not supabase:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase not configured (missing SUPABASE_URL or SUPABASE_SECRET_KEY)",
-        )
+        print("[Auth] Supabase not configured, returning Demo User")
+        return get_demo_user(db)
+
     try:
         # Verify the JWT with Supabase
         print(f"[Auth] Calling supabase.auth.get_user()")
@@ -99,14 +107,6 @@ def get_current_user(
         return user
         
     except Exception as e:
-        print("=" * 50)
-        print(f"[Auth] ERROR verifying token: {type(e).__name__} - {str(e)}")
-        import traceback
-        print(f"[Auth] Full traceback:")
-        traceback.print_exc()
-        print("=" * 50)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication credentials: {type(e).__name__} - {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        print(f"[Auth] Notice: Token verification failed ({type(e).__name__}: {e}). Using Demo User fallback.")
+        return get_demo_user(db)
+

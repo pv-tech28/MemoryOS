@@ -18,3 +18,4 @@ psycopg2-binary
 alembic
 supabase
 asyncpg
+email-validator
