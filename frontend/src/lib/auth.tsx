@@ -8,12 +8,38 @@ import { saveGoogleTokens } from './api';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isDemoUser: boolean;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string, username: string) => Promise<void>;
   signInWithGoogle: (redirectTo?: string) => Promise<void>;
+  signInAsDemoUser: () => Promise<void>;
   signOut: () => Promise<void>;
   logout: () => Promise<void>;
   resetPasswordForEmail: (email: string) => Promise<void>;
+}
+
+const DEMO_USER: User = {
+  id: 'demo-user-id',
+  app_metadata: { provider: 'demo' },
+  user_metadata: {
+    full_name: 'Demo User',
+    username: 'demouser',
+  },
+  aud: 'authenticated',
+  created_at: new Date().toISOString(),
+  email: 'demo@evolve.ai',
+} as User;
+
+function setDemoSessionCookie() {
+  if (typeof document !== 'undefined') {
+    document.cookie = 'evolve_demo_session=true; path=/; max-age=604800; SameSite=Lax';
+  }
+}
+
+function clearDemoSessionCookie() {
+  if (typeof document !== 'undefined') {
+    document.cookie = 'evolve_demo_session=; path=/; max-age=0; SameSite=Lax';
+  }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,11 +47,38 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDemoUser, setIsDemoUser] = useState(false);
 
   useEffect(() => {
+    // Check if demo user is already stored locally
+    if (typeof window !== 'undefined') {
+      const storedDemo = localStorage.getItem('evolve_demo_user');
+      if (storedDemo) {
+        try {
+          const parsed = JSON.parse(storedDemo);
+          setUser(parsed);
+          setIsDemoUser(true);
+          setDemoSessionCookie();
+          setLoading(false);
+          return;
+        } catch {
+          localStorage.removeItem('evolve_demo_user');
+        }
+      }
+    }
+
     const handleAuthStateChange = async (_event: string, session: any) => {
       console.log('[Auth] Auth state changed:', _event);
-      setUser(session?.user ?? null);
+      if (session?.user) {
+        setUser(session.user);
+        setIsDemoUser(false);
+      } else {
+        const storedDemo = typeof window !== 'undefined' ? localStorage.getItem('evolve_demo_user') : null;
+        if (!storedDemo) {
+          setUser(null);
+          setIsDemoUser(false);
+        }
+      }
       setLoading(false);
 
       // If we have a session with provider tokens, save them to our backend
@@ -35,7 +88,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await saveGoogleTokens(
             session.provider_token,
             session.provider_refresh_token,
-            // Extract scopes from session or use default
             session.user?.app_metadata?.provider_scopes || [
               'https://www.googleapis.com/auth/gmail.readonly',
               'https://www.googleapis.com/auth/drive.readonly',
@@ -49,10 +101,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Check active session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      await handleAuthStateChange('', session);
-    });
+    // Check active session safely
+    try {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        await handleAuthStateChange('', session);
+      }).catch((err) => {
+        console.warn('[Auth] Supabase getSession failed:', err);
+        setLoading(false);
+      });
+    } catch (err) {
+      console.warn('[Auth] Supabase getSession error:', err);
+      setLoading(false);
+    }
 
     // Listen for auth changes
     const {
@@ -63,53 +123,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithPassword = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch' || err.name === 'AuthRetryableFetchError') {
+        throw new Error('AUTH_SERVER_UNREACHABLE');
+      }
+      throw err;
+    }
   };
 
   const signUp = async (email: string, password: string, fullName: string, username: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, username },
-      },
-    });
-    if (error) throw error;
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName, username },
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch' || err.name === 'AuthRetryableFetchError') {
+        throw new Error('AUTH_SERVER_UNREACHABLE');
+      }
+      throw err;
+    }
+  };
+
+  const signInAsDemoUser = async () => {
+    setUser(DEMO_USER);
+    setIsDemoUser(true);
+    setDemoSessionCookie();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('evolve_demo_user', JSON.stringify(DEMO_USER));
+    }
   };
 
   const signInWithGoogle = async (redirectTo?: string) => {
     const finalRedirectTo = redirectTo || `${window.location.origin}/dashboard`;
     console.log("[Auth] Starting Google sign in...");
-    console.log("[Auth] Using provider:", "google");
     console.log("[Auth] Redirect URL:", finalRedirectTo);
     
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: finalRedirectTo,
-        scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/calendar.readonly",
-      },
-    });
-    
-    console.log("[Auth] signInWithOAuth response:", { data, error });
-    
-    if (error) {
-      console.error("[Auth] Google sign in error:", error);
-      throw error;
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: finalRedirectTo,
+          scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/calendar.readonly",
+        },
+      });
+      
+      if (error) {
+        console.error("[Auth] Google sign in error:", error);
+        throw error;
+      }
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch' || err.name === 'AuthRetryableFetchError') {
+        throw new Error('AUTH_SERVER_UNREACHABLE');
+      }
+      throw err;
     }
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    clearDemoSessionCookie();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('evolve_demo_user');
+    }
+    setUser(null);
+    setIsDemoUser(false);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('[Auth] Supabase signOut error:', err);
+    }
   };
 
   const resetPasswordForEmail = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) throw error;
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch' || err.name === 'AuthRetryableFetchError') {
+        throw new Error('AUTH_SERVER_UNREACHABLE');
+      }
+      throw err;
+    }
   };
 
   return (
@@ -117,9 +220,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         loading,
+        isDemoUser,
         signInWithPassword,
         signUp,
         signInWithGoogle,
+        signInAsDemoUser,
         signOut,
         logout: signOut,
         resetPasswordForEmail,

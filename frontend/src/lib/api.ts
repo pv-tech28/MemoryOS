@@ -1,21 +1,36 @@
-﻿
+
 /**
  * EVOLVE AI — API Client
  * Functions for communicating with the FastAPI backend.
  */
 import { supabase } from "./supabase";
 
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? "/api" : "http://localhost:8000/api");
 
 // Helper to get auth headers
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (token) {
-    return {
-      "Authorization": `Bearer ${token}`,
-    };
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (token) {
+      return {
+        "Authorization": `Bearer ${token}`,
+      };
+    }
+  } catch (err) {
+    console.warn("[API] Could not get Supabase session token:", err);
   }
+
+  // Check demo user mode
+  if (typeof window !== "undefined") {
+    const demoUser = localStorage.getItem("evolve_demo_user");
+    if (demoUser) {
+      return {
+        "Authorization": "Bearer demo-token",
+      };
+    }
+  }
+
   return {};
 }
 
