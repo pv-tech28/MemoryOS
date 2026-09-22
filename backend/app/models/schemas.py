@@ -119,8 +119,33 @@ class Memory(BaseModel):
     frequency: Optional[int] = 0
     last_accessed: Optional[str] = None
     access_count: Optional[int] = 0
+    status: Optional[str] = "active"
+    confidence: Optional[float] = 1.0
+    valid_from: Optional[str] = None
+    valid_until: Optional[str] = None
+    superseded_by_id: Optional[str] = None
+    source_ref: Optional[str] = None
     created_at: str
     updated_at: str
+
+
+class MemoryConflictResponse(BaseModel):
+    id: str
+    user_id: str
+    existing_memory_id: str
+    existing_memory_text: Optional[str] = None
+    incoming_memory_text: str
+    incoming_memory_type: str
+    conflict_type: str
+    confidence: float
+    explanation: Optional[str] = None
+    resolution_status: str
+    created_at: str
+    resolved_at: Optional[str] = None
+
+
+class ResolveConflictRequest(BaseModel):
+    action: str  # "accept_new" or "keep_existing"
 
 
 class TimelineEvent(BaseModel):

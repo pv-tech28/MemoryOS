@@ -31,12 +31,23 @@ def create_memory(
     memory_text: str,
     importance: float = 0.5,
     user_id: str = "default_user",
+    status: str = "active",
+    confidence: float = 1.0,
+    source_ref: Optional[str] = None,
 ) -> str:
     """Create a new memory and return its ID."""
     db = _get_db()
     try:
         memory_id = MemoryRepository.create(
-            db, chat_id, memory_type, memory_text, importance, user_id
+            db,
+            chat_id=chat_id,
+            memory_type=memory_type,
+            memory_text=memory_text,
+            importance=importance,
+            user_id=user_id,
+            status=status,
+            confidence=confidence,
+            source_ref=source_ref,
         )
         db.commit()
 

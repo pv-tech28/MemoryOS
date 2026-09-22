@@ -21,9 +21,11 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     # Add new columns
-    op.add_column('users', sa.Column('auth_id', sa.String(), nullable=True))  # nullable first, then we'll make it not null later if possible
+    op.add_column('users', sa.Column('auth_id', sa.String(), nullable=True))
     op.add_column('users', sa.Column('full_name', sa.String(), nullable=True))
+    op.add_column('users', sa.Column('username', sa.String(), nullable=True))
     op.add_column('users', sa.Column('avatar_url', sa.String(), nullable=True))
+    op.add_column('users', sa.Column('password_hash', sa.String(), nullable=True))
     op.add_column('users', sa.Column('plan', sa.String(), nullable=False, server_default='free'))
     op.add_column('users', sa.Column('memory_health', sa.Float(), nullable=False, server_default='100.0'))
     op.add_column('users', sa.Column('last_login', sa.DateTime(), nullable=True))
@@ -33,12 +35,8 @@ def upgrade() -> None:
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
     
-    # Drop old columns we don't need
+    # Drop old column
     op.drop_column('users', 'display_name')
-    op.drop_column('users', 'profile_picture_url')
-    op.drop_column('users', 'bio')
-    op.drop_column('users', 'email_verified')
-    op.drop_column('users', 'password_hash')
 
 
 def downgrade() -> None:

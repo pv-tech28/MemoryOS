@@ -107,33 +107,48 @@ def extract_memories(
                 )
 
                 memory_id = None
-                if existing:
-                    # Update existing memory: keep text, boost importance
+                if existing and existing["memory"].strip().lower() == memory_obj["memory"].strip().lower():
+                    # Exact duplicate memory: boost importance
                     new_importance = min(1.0, existing["importance"] + 0.1)
                     update_memory(
                         memory_id=existing["id"],
-                        memory_text=memory_obj["memory"],  # Use latest version
+                        memory_text=memory_obj["memory"],
                         importance=new_importance,
                         memory_type=memory_obj["type"]
                     )
                     memory_id = existing["id"]
                     stored_ids.append(memory_id)
                 else:
-                    # Create new memory
+                    # Create new memory with status='pending_review'
+                    source_ref = f"chat:{chat_id}"
                     memory_id = create_memory(
                         chat_id=chat_id,
                         memory_type=memory_obj["type"],
                         memory_text=memory_obj["memory"],
                         importance=importance,
-                        user_id=user_id
+                        user_id=user_id,
+                        status="pending_review",
+                        source_ref=source_ref,
                     )
                     stored_ids.append(memory_id)
+
+                    # Constraint 2: Dispatch async/background contradiction check
+                    # Chat response path does NOT wait on this second LLM call!
+                    import threading
+                    from app.services.contradiction_service import ContradictionService
+
+                    threading.Thread(
+                        target=ContradictionService.process_incoming_memory,
+                        args=(memory_id, user_id, source_ref),
+                        daemon=True,
+                    ).start()
                 
                 # Update memory graph (for both new and updated memories)
                 try:
                     update_graph_from_memory(
                         memory_text=memory_obj["memory"],
-                        memory_type=memory_obj["type"]
+                        memory_type=memory_obj["type"],
+                        user_id=user_id,
                     )
                 except Exception as e:
                     print(f"[MemoryExtractor] Error updating graph: {e}")

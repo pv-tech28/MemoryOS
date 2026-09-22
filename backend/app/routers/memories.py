@@ -122,4 +122,91 @@ def get_stats(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Memory Conflicts & Versioning Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+from app.database import SessionLocal
+from app.repositories.memory_repo import MemoryRepository
+from app.models.schemas import MemoryConflictResponse, ResolveConflictRequest
+
+
+@router.get("/conflicts", response_model=list[MemoryConflictResponse])
+def get_pending_conflicts(current_user: User = Depends(get_current_user)):
+    """List all pending memory conflicts awaiting user review."""
+    db = SessionLocal()
+    try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+        conflicts = MemoryRepository.get_pending_conflicts(db, user_id=user_id)
+        return [MemoryConflictResponse(**c) for c in conflicts]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.post("/conflicts/{conflict_id}/resolve")
+def resolve_conflict(
+    conflict_id: str,
+    request: ResolveConflictRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Resolve a contradiction or temporal conflict: action='accept_new' or 'keep_existing'."""
+    if request.action not in ("accept_new", "keep_existing"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action '{request.action}'. Only 'accept_new' and 'keep_existing' are supported in v1."
+        )
+
+    db = SessionLocal()
+    try:
+        user_id = current_user.id if current_user and current_user.id else "demo-user-id"
+        result = MemoryRepository.resolve_conflict(
+            db=db,
+            conflict_id=conflict_id,
+            user_id=user_id,
+            action=request.action,
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="Conflict not found")
+        db.commit()
+        return result
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.get("/history/{memory_id}")
+def get_memory_history(
+    memory_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve version lineage for a memory."""
+    db = SessionLocal()
+    try:
+        mem = MemoryRepository.get_by_id(db, memory_id)
+        if not mem:
+            raise HTTPException(status_code=404, detail="Memory not found")
+
+        history = [MemoryRepository._to_dict(mem)]
+        curr = mem
+        # Follow backward lineage if this memory was superseded
+        while curr and curr.superseded_by_id:
+            next_mem = MemoryRepository.get_by_id(db, curr.superseded_by_id)
+            if next_mem:
+                history.append(MemoryRepository._to_dict(next_mem))
+                curr = next_mem
+            else:
+                break
+
+        return {"lineage": history}
+    finally:
+        db.close()
+
+
 

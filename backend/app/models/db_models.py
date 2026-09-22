@@ -44,6 +44,7 @@ class User(Base):
     timeline_events = relationship("TimelineEventModel", back_populates="user", cascade="all, delete-orphan")
     google_credentials = relationship("GoogleCredential", back_populates="user", cascade="all, delete-orphan")
     uploads = relationship("Upload", back_populates="user", cascade="all, delete-orphan")
+    conflicts = relationship("MemoryConflict", back_populates="user", cascade="all, delete-orphan")
 
 
 
@@ -156,18 +157,52 @@ class Memory(Base):
     frequency = Column(Integer, default=0)
     last_accessed = Column(DateTime, nullable=True)
     access_count = Column(Integer, default=0)
+    status = Column(String, default="active", nullable=False)  # active, pending_review, superseded, disputed, archived
+    confidence = Column(Float, default=1.0, nullable=False)
+    valid_from = Column(DateTime, default=datetime.utcnow, nullable=False)
+    valid_until = Column(DateTime, nullable=True)
+    superseded_by_id = Column(String, ForeignKey("memories.id", ondelete="SET NULL"), nullable=True)
+    source_ref = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="memories")
+    superseded_by = relationship("Memory", remote_side=[id], backref="superseded_memories")
+    conflicts = relationship("MemoryConflict", back_populates="existing_memory", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_memories_importance", "importance"),
         Index("ix_memories_type", "type"),
         Index("ix_memories_chat_id", "chat_id"),
+        Index("ix_memories_status", "status"),
+        Index("ix_memories_source_ref", "source_ref"),
         CheckConstraint("importance >= 0 AND importance <= 1", name="ck_memories_importance_range"),
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Memory Conflicts (Contradiction & Low-Confidence Temporal Updates)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MemoryConflict(Base):
+    __tablename__ = "memory_conflicts"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    existing_memory_id = Column(String, ForeignKey("memories.id", ondelete="CASCADE"), nullable=False, index=True)
+    incoming_memory_text = Column(Text, nullable=False)
+    incoming_memory_type = Column(String, nullable=False)
+    conflict_type = Column(String, nullable=False)  # 'contradiction' or 'temporal_update_low_confidence'
+    confidence = Column(Float, default=0.0, nullable=False)
+    explanation = Column(Text, nullable=True)
+    resolution_status = Column(String, default="pending_review", nullable=False, index=True)  # pending_review, accepted_new, kept_existing
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="conflicts")
+    existing_memory = relationship("Memory", back_populates="conflicts")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

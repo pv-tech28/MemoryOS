@@ -4,7 +4,8 @@ __pycache__
 *.pyc
 uploads
 chroma_db
-test_*.py
+/test_*.py
+!tests/
 model_cache
 fastembed_cache
 .env
