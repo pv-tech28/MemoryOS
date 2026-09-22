@@ -15,6 +15,7 @@
   <a href="#-tech-stack">Tech Stack</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-architecture">Architecture</a> •
+  <a href="#-roadmap--development-plan">Roadmap & Plan</a> •
   <a href="#-contributing">Contributing</a>
 </p>
 
@@ -311,17 +312,75 @@ Key tables in the PostgreSQL database:
 
 ---
 
-## 🗺️ Roadmap
+## 🗺️ Roadmap & Development Plan
 
-### ✅ Completed
-- [x] Supabase Authentication
-- [x] Memory Graph Visualization
-- [x] RAG System
-- [x] Timeline View
-- [x] PostgreSQL Migration
-- [x] Semantic Search
-- [x] Google Drive & Gmail Integration
-- [x] Dark Theme UI
+An in-depth breakdown of what has been implemented so far and the roadmap of features and infrastructure planned next.
+
+### ✅ What We've Done (Completed Milestones)
+
+#### 🔐 Authentication, Authorization & Multi-Tenancy
+- [x] **Supabase Authentication**: Full email and password signup, login, session persistence, and token verification.
+- [x] **Google OAuth 2.0 Integration**: One-click Google sign-in with token handling for accessing Google services.
+- [x] **Demo Mode & Guest Access**: Built-in demo authentication and middleware bypass for instant UI evaluation without requiring cloud credentials.
+- [x] **User-Scoped Isolation**: Strict tenant isolation across all database queries ensuring users only see and query their own memory nodes, edges, and documents.
+- [x] **Protected Routes**: Next.js client- and server-side middleware for automatic redirection of unauthenticated sessions.
+
+#### 🧠 Semantic Memory & Knowledge Graph
+- [x] **Interactive Memory Graph**: Force-directed, interactive visualization using React Flow and D3 (`/memory-graph`).
+- [x] **Automated Entity & Relation Extraction**: Automatic identification of entities (People, Organizations, Projects, Concepts) and relationships from text using OpenRouter/DeepSeek.
+- [x] **Graph Exploration Tools**: Search nodes, filter by entity type, inspect node details, and analyze connections.
+- [x] **Dual Database Architecture**: Production-grade Supabase PostgreSQL support with an automatic SQLite fallback for lightweight local development.
+- [x] **Database Seed Generator**: Standalone automated database seeding script (`backend/app/seed.py`) with rich sample graphs, timeline events, and memories for instant testing.
+
+#### 🤖 Retrieval-Augmented Generation (RAG) & AI Engine
+- [x] **Hybrid RAG Pipeline**: Combines vector retrieval with memory graph context to provide grounded, hallucination-resistant answers.
+- [x] **Vector Embeddings & Semantic Search**: Fast, local vector embeddings with FastEmbed and FAISS-based vector storage.
+- [x] **Document Ingestion & Chunking**: PyMuPDF integration for high-fidelity PDF parsing and recursive text chunking with metadata tracking.
+- [x] **Persistent Chat Sessions**: Conversational history tracking (`/ask`) with context retention, prompt synthesis, and source document citations.
+
+#### 🖥️ Modern Web Application & Modules
+- [x] **Unified Dark-Themed Dashboard**: Live metrics for graph nodes, relationships, extracted memories, and connected sources.
+- [x] **Interactive Query Hub (`/ask`)**: Clean AI chat interface with instant responses and source attribution.
+- [x] **Timeline Visualization (`/timeline`)**: Chronological event feed displaying memory milestones and activity history.
+- [x] **Daily Summary Digest (`/daily-summary`)**: Recap page highlighting daily key insights and conversational takeaways.
+- [x] **Document Library & Upload (`/files`, `/upload`)**: Drag-and-drop document upload with processing status indicators.
+- [x] **Sources & Integrations Hub (`/sources`, `/settings`)**: Configuration hub for Google Drive, Gmail, API keys, and model parameters.
+
+---
+
+### 🚧 What is Remaining (Planned & In Progress)
+
+#### 🔄 1. Core Memory & Knowledge Evolution
+- [ ] **Temporal Memory Decay & Reinforcement**: Implement memory weighting where frequently revisited facts remain prominent while outdated context fades gracefully.
+- [ ] **Multi-Hop Graph Traversal**: Upgrade the RAG engine to traverse 2nd- and 3rd-degree relationship hops for complex associative queries.
+- [ ] **Automated Memory Consolidation**: Scheduled background jobs to merge duplicate entities, reconcile alias names, and summarize dense clusters.
+- [ ] **Contradiction Detection**: Detect when newly ingested documents or messages contradict prior facts and prompt the user or track belief updates.
+
+#### 🌐 2. Data Connectors & Ingestion Pipeline
+- [ ] **Continuous Background Syncing**: Webhooks and background workers (Celery/Temporal or async task schedulers) for automated Google Drive and Gmail sync.
+- [ ] **Extended External Connectors**:
+  - [ ] **Notion Connector**: Ingest pages, databases, and workspace notes.
+  - [ ] **Slack / Discord Connector**: Ingest conversations, threads, and bookmarked messages.
+  - [ ] **Obsidian / Local Markdown Vaults**: Native folder sync for personal knowledge management (PKM) users.
+  - [ ] **Browser Extension (Chrome / Firefox)**: One-click web clipper to save highlighted text and web pages directly into MemoryOS.
+- [ ] **Multimodal Ingestion**: OCR extraction for images, whiteboard diagrams, receipts, and handwritten notes.
+- [ ] **Voice Memory & Audio Transcriptions**: Whisper integration to transcribe voice notes and recorded meetings into structured memories.
+
+#### 🤖 3. Proactive & Agentic Capabilities
+- [ ] **Proactive Context Agent**: Ambient memory assistant that surfaces relevant files, previous discussions, or people profiles ahead of scheduled calendar meetings.
+- [ ] **IDE & Productivity Plugins**: Editor plugins (VS Code, JetBrains) allowing memory queries directly inside your development workflow.
+- [ ] **Autonomous Weekly Digest**: Auto-generated comprehensive synthesis reports detailing knowledge growth, key decisions, and topic trends.
+
+#### 👥 4. Collaboration & Team Workspaces
+- [ ] **Shared Memory Spaces**: Team knowledge graphs with granular Role-Based Access Control (RBAC).
+- [ ] **Selective Privacy Toggles**: Toggle individual memory nodes, edges, or documents between public, workspace, and strictly private.
+- [ ] **Open Memory Export**: Export graph and memories to standard formats (JSON-LD, Neo4j graph dump, Markdown vault).
+
+#### 🛡️ 5. Production Readiness, DevOps & Mobile
+- [ ] **Docker & Docker Compose**: Full-stack containerized deployment (`docker-compose up`) for one-click self-hosting.
+- [ ] **CI/CD Pipelines**: Automated GitHub Actions workflows for automated testing, linting, and build validation.
+- [ ] **Automated Test Coverage**: Comprehensive unit, integration, and E2E test suite covering RAG, graph builder, and API endpoints.
+- [ ] **Mobile Companion (PWA / React Native)**: Responsive mobile experience optimized for fast voice memos and on-the-go memory search.
 
 ---
 
