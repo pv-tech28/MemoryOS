@@ -1,4 +1,6 @@
-from fastapi import Depends, HTTPException, status
+import os
+import jwt
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -6,9 +8,8 @@ from app.database import get_db
 from app.supabase import supabase
 from app.models.db_models import User
 from typing import Optional
-import json
-import base64
 
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "your-secret-key-change-in-production")
 security = HTTPBearer(auto_error=False)
 
 def get_demo_user(db: Session) -> User:
@@ -37,28 +38,37 @@ def get_demo_user(db: Session) -> User:
 
 
 def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    """Get the current authenticated user from Supabase JWT token, with fallback to Demo User."""
-    if not credentials or not credentials.credentials:
-        print("[Auth] No credentials provided, falling back to Demo User")
-        return get_demo_user(db)
-        
-    token = credentials.credentials
-    if token in ("demo-token", "null", "undefined"):
-        print("[Auth] Demo token provided, returning Demo User")
+    """Get the current authenticated user from local JWT token or Supabase, with fallback to Demo User."""
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif request and request.cookies.get("evolve_auth_token"):
+        token = request.cookies.get("evolve_auth_token")
+
+    if not token or token in ("demo-token", "null", "undefined"):
         return get_demo_user(db)
 
+    # 1. Try verifying local JWT token first
+    try:
+        payload = jwt.decode(token, SESSION_SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                return user
+    except Exception:
+        pass
+
     if not supabase:
-        print("[Auth] Supabase not configured, returning Demo User")
         return get_demo_user(db)
 
     try:
-        # Verify the JWT with Supabase
-        print(f"[Auth] Calling supabase.auth.get_user()")
+        # 2. Fallback to Supabase if configured
         auth_response = supabase.auth.get_user(token)
-        print(f"[Auth] supabase.auth.get_user() succeeded! User: {auth_response.user}")
         supabase_user = auth_response.user
         
         if not supabase_user:

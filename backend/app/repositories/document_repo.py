@@ -33,22 +33,37 @@ class DocumentRepository:
         metadata: Optional[dict] = None,
         user_id: str = DEFAULT_USER_ID,
     ) -> Document:
-        """Create a new document record."""
+        """Create or update a document record."""
         effective_uid = "demo-user-id" if user_id in ("default_user", None, "") else user_id
-        doc = Document(
-            id=doc_id,
-            user_id=effective_uid,
-            filename=filename,
-            file_path=file_path,
-            source=source,
-            page_count=page_count,
-            chunk_count=chunk_count,
-            file_size=file_size,
-            status=status,
-            metadata_json=metadata or {},
-            uploaded_at=datetime.utcnow(),
-        )
-        db.add(doc)
+        doc = db.query(Document).filter(Document.id == doc_id).first()
+        if doc:
+            doc.user_id = effective_uid
+            doc.filename = filename
+            doc.file_path = file_path or doc.file_path
+            doc.source = source
+            doc.page_count = page_count
+            doc.chunk_count = chunk_count
+            doc.file_size = file_size
+            doc.status = status
+            doc.metadata_json = metadata or {}
+            doc.uploaded_at = datetime.utcnow()
+            # Remove existing chunks before re-inserting
+            db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).delete()
+        else:
+            doc = Document(
+                id=doc_id,
+                user_id=effective_uid,
+                filename=filename,
+                file_path=file_path,
+                source=source,
+                page_count=page_count,
+                chunk_count=chunk_count,
+                file_size=file_size,
+                status=status,
+                metadata_json=metadata or {},
+                uploaded_at=datetime.utcnow(),
+            )
+            db.add(doc)
         db.flush()
         return doc
 

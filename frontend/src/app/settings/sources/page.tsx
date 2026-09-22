@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { ChevronLeft, Mail, HardDrive, Calendar, RefreshCw, Link2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { getConnectedSources, syncSource, disconnectSource, ConnectedSources } from "@/lib/api";
+import { getConnectedSources, syncSource, disconnectSource, ConnectedSources, loginWithGoogle } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export default function ConnectedSourcesPage() {
@@ -40,17 +40,15 @@ export default function ConnectedSourcesPage() {
     setLoading(prev => ({ ...prev, google: true }));
     setError(null);
     try {
-      console.log("[Sources] Connecting Google sources...");
-      // signInWithOAuth redirects the page, so we don't need to wait for it to resolve
-      signInWithGoogle().catch((err: any) => {
-        console.error("[Sources] Failed to connect:", err);
-        setError(err.message || "Failed to connect Google sources");
+      console.log("[Sources] Connecting Google sources via backend OAuth...");
+      await loginWithGoogle(window.location.href);
+    } catch (err: any) {
+      console.warn("[Sources] Backend connect failed, falling back to Supabase OAuth:", err);
+      signInWithGoogle().catch((err2: any) => {
+        console.error("[Sources] Failed to connect:", err2);
+        setError(err2.message || "Failed to connect Google sources");
         setLoading(prev => ({ ...prev, google: false }));
       });
-    } catch (err: any) {
-      console.error("[Sources] Failed to connect:", err);
-      setError(err.message || "Failed to connect Google sources");
-      setLoading(prev => ({ ...prev, google: false }));
     }
   };
 

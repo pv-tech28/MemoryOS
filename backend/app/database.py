@@ -122,4 +122,10 @@ def init_database():
         GoogleCredential, Upload,
     )
     Base.metadata.create_all(bind=engine)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR;"))
+            conn.commit()
+    except Exception:
+        pass
     print("[Database] Tables created / verified.")

@@ -21,6 +21,17 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
+  // Check for backend-issued JWT cookie (native Google OAuth flow)
+  const backendAuthCookie = req.cookies.get('evolve_auth_token');
+  if (backendAuthCookie?.value && backendAuthCookie.value !== 'null' && backendAuthCookie.value !== 'undefined') {
+    if (path === '/' || path === '/login' || path === '/signup') {
+      const url = req.nextUrl.clone();
+      url.pathname = '/dashboard';
+      return NextResponse.redirect(url);
+    }
+    return res;
+  }
+
   let session = null;
   try {
     const supabase = createServerClient(

@@ -20,7 +20,10 @@ import {
   deleteDocument, 
   syncGmail, 
   syncDrive, 
-  syncCalendar 
+  syncCalendar,
+  checkAuthStatus,
+  getCookie,
+  loginWithGoogle,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -102,21 +105,95 @@ export default function SourcesPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [hasGoogle, setHasGoogle] = useState(false);
+  const [authStatusLoading, setAuthStatusLoading] = useState(true);
   const { user, signInWithGoogle } = useAuth();
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchData() {
       try {
         const docs = await getDocuments();
-        setDocuments(docs.documents || []);
+        if (!cancelled) setDocuments(docs.documents || []);
       } catch (error) {
         console.error("Failed to fetch data:", error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
+      }
+    }
+    async function fetchAuthStatus() {
+      try {
+        const status = await checkAuthStatus();
+        if (!cancelled) setHasGoogle(status.has_google);
+        return status;
+      } catch (error) {
+        console.error("Failed to fetch auth status:", error);
+        if (!cancelled) setHasGoogle(false);
+        return { has_google: false };
+      } finally {
+        if (!cancelled) setAuthStatusLoading(false);
       }
     }
     fetchData();
-  }, []);
+    const hasBackendCookie = typeof window !== "undefined" && !!getCookie("evolve_auth_token");
+    const isGoogleSignIn = user?.app_metadata?.provider === "google";
+
+    if (user || hasBackendCookie) {
+      const justLoggedInViaSupabase =
+        typeof window !== "undefined" &&
+        !sessionStorage.getItem("evolve_google_welcomed") &&
+        isGoogleSignIn;
+
+      fetchAuthStatus().then((status) => {
+        if (cancelled) return;
+        if (justLoggedInViaSupabase) {
+          try { sessionStorage.setItem("evolve_google_welcomed", "1"); } catch (_) { /* noop */ }
+          setTimeout(() => {
+            if (cancelled) return;
+            setSyncMessage(
+              status?.has_google
+                ? "Google connected successfully! You can now sync Gmail, Drive, and Calendar."
+                : "Google sign in completed. If sources still show 'Connect Google', click Sync once more."
+            );
+          }, 900);
+        }
+      });
+    } else {
+      setHasGoogle(false);
+      setAuthStatusLoading(false);
+    }
+
+    // If returning from backend OAuth connect flow, acknowledge the success
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("google_connected") === "1") {
+        // Clean the URL (strip query param so it doesn't persist on reload)
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+        // Re-check with backend after a brief delay to ensure credentials persisted
+        setTimeout(async () => {
+          if (cancelled) return;
+          try {
+            const status = await fetchAuthStatus();
+            if (cancelled) return;
+            setSyncMessage(
+              status?.has_google
+                ? "Google connected successfully! You can now sync Gmail, Drive, and Calendar."
+                : "Google connect completed. If sources still show 'Connect Google', please click it once more."
+            );
+          } catch {
+            if (!cancelled) {
+              setSyncMessage(
+                "Google connect completed. If sources still show 'Connect Google', please click it once more."
+              );
+            }
+          }
+        }, 800);
+      }
+    }
+
+    return () => { cancelled = true; };
+  }, [user]);
 
   const handleDelete = async (docId: string) => {
     try {
@@ -130,16 +207,38 @@ export default function SourcesPage() {
   const handleSync = async (sourceName: string, syncFn: () => Promise<any>) => {
     if (!user) {
       setSyncing(sourceName);
+      setSyncMessage("Redirecting to Google to connect sources...");
       try {
-        console.log("[Sources] Connecting Google sources...");
-        // signInWithOAuth redirects the page, so we don't need to wait for it to resolve
-        signInWithGoogle(window.location.href).catch((err: any) => {
-          console.error("[Sources] Failed to connect:", err);
-          setSyncing(null);
-        });
+        console.log("[Sources] !user -> connecting via Google OAuth...");
+        await loginWithGoogle(window.location.href);
       } catch (err: any) {
-        console.error("[Sources] Failed to connect:", err);
-        setSyncing(null);
+        console.warn("[Sources] Backend login failed, falling back to Supabase OAuth:", err);
+        try {
+          await signInWithGoogle(window.location.href);
+        } catch (err2: any) {
+          console.error("[Sources] Failed to connect:", err2);
+          setSyncing(null);
+          setSyncMessage(`Failed to connect Google: ${err2?.message ?? String(err2)}`);
+        }
+      }
+      return;
+    }
+
+    if (!hasGoogle) {
+      setSyncing(sourceName);
+      setSyncMessage("Redirecting to Google to connect sources...");
+      try {
+        console.log("[Sources] has_google=false; connecting via Google OAuth...");
+        await loginWithGoogle(window.location.href);
+      } catch (err: any) {
+        console.warn("[Sources] Backend connect failed, falling back to Supabase OAuth:", err);
+        try {
+          await signInWithGoogle(window.location.href);
+        } catch (err2: any) {
+          console.error("[Sources] Failed to connect:", err2);
+          setSyncing(null);
+          setSyncMessage(`Failed to connect Google: ${err2?.message ?? String(err2)}`);
+        }
       }
       return;
     }
@@ -153,9 +252,21 @@ export default function SourcesPage() {
       // Refresh documents after sync
       const docs = await getDocuments();
       setDocuments(docs.documents || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to sync ${sourceName}:`, error);
-      setSyncMessage(`Failed to sync ${sourceName}`);
+      const msg = error?.message ?? String(error);
+      if (
+        msg.includes("Not authenticated with Google") ||
+        msg.includes("401") ||
+        msg.includes("authentication has expired")
+      ) {
+        setHasGoogle(false);
+        setSyncMessage(
+          "Google credentials missing or expired — click Sync again to reconnect"
+        );
+      } else {
+        setSyncMessage(`Failed to sync ${sourceName}`);
+      }
     } finally {
       setSyncing(null);
     }
@@ -197,7 +308,7 @@ export default function SourcesPage() {
                   >
                     <Icon size={22} style={{ color: source.color }} />
                   </div>
-                  {user && (
+                  {!authStatusLoading && hasGoogle && (
                     <span className="badge-connected">Connected</span>
                   )}
                 </div>
@@ -211,7 +322,7 @@ export default function SourcesPage() {
                   disabled={syncing === source.name}
                   className="w-full mt-4 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-[1.02]"
                   style={
-                    user
+                    hasGoogle
                       ? {
                           background: "var(--accent)",
                           color: "#fff",
@@ -225,8 +336,8 @@ export default function SourcesPage() {
                   }
                 >
                   {syncing === source.name 
-                    ? "Syncing..." 
-                    : user 
+                    ? (hasGoogle ? "Syncing..." : "Connecting...")
+                    : hasGoogle 
                       ? "Sync" 
                       : "Connect Google"
                   }
