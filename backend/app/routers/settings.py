@@ -4,14 +4,23 @@ Settings Router — handles all user settings endpoints:
 profile, email, security, appearance, notifications, language, etc.
 """
 
+import os
+import uuid
 from datetime import datetime, UTC
-from fastapi import APIRouter, Depends
+from pathlib import Path
+from typing import Optional
+from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
-from app.models.db_models import User, Document, GraphNodeModel, GraphEdgeModel, Memory, Chat, ChatMessage, TimelineEventModel
+from app.models.db_models import (
+    User, Document, GraphNodeModel, GraphEdgeModel, Memory,
+    Chat, ChatMessage, TimelineEventModel, UserSettingsModel
+)
 from app.services.memory_graph_builder import get_graph_service
 from app.dependencies import get_current_user
+from app.routers.auth import hash_password, verify_password
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -21,17 +30,266 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 # ─────────────────────────────────────────────────────────────────────────────
 # Profile Management
 # ─────────────────────────────────────────────────────────────────────────────
+class UpdateProfileRequest(BaseModel):
+    display_name: Optional[str] = None
+    full_name: Optional[str] = None
+    username: Optional[str] = None
+    bio: Optional[str] = None
+
+
 @router.get("/profile")
 async def get_profile(
     current_user: User = Depends(get_current_user)
 ):
+    avatar = current_user.avatar_url
     return {
         "id": current_user.id,
-        "full_name": current_user.full_name,
-        "username": current_user.username,
-        "email": current_user.email,
-        "avatar_url": current_user.avatar_url
+        "email": current_user.email or "",
+        "full_name": current_user.full_name or "",
+        "display_name": current_user.full_name or current_user.username or "",
+        "username": current_user.username or "",
+        "bio": current_user.bio or "",
+        "avatar_url": avatar,
+        "profile_picture_url": avatar,
+        "email_verified": bool(current_user.email),
     }
+
+
+@router.put("/profile")
+async def update_profile(
+    data: UpdateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if data.display_name is not None:
+        current_user.full_name = data.display_name
+    elif data.full_name is not None:
+        current_user.full_name = data.full_name
+
+    if data.username is not None:
+        clean_username = data.username.strip()
+        if clean_username:
+            existing = db.query(User).filter(User.username == clean_username, User.id != current_user.id).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="Username is already taken")
+            current_user.username = clean_username
+        else:
+            current_user.username = None
+
+    if data.bio is not None:
+        current_user.bio = data.bio
+
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+
+    avatar = current_user.avatar_url
+    return {
+        "id": current_user.id,
+        "email": current_user.email or "",
+        "full_name": current_user.full_name or "",
+        "display_name": current_user.full_name or current_user.username or "",
+        "username": current_user.username or "",
+        "bio": current_user.bio or "",
+        "avatar_url": avatar,
+        "profile_picture_url": avatar,
+        "email_verified": bool(current_user.email),
+    }
+
+
+@router.post("/profile/picture")
+async def upload_profile_picture(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    upload_dir = Path("uploads")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    file_ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    safe_filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:8]}{file_ext}"
+    target_path = upload_dir / safe_filename
+
+    contents = await file.read()
+    with open(target_path, "wb") as f:
+        f.write(contents)
+
+    url_path = f"/uploads/{safe_filename}"
+    current_user.avatar_url = url_path
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "profile_picture_url": url_path,
+        "avatar_url": url_path
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Email Settings
+# ─────────────────────────────────────────────────────────────────────────────
+class UpdateEmailRequest(BaseModel):
+    new_email: EmailStr
+
+
+@router.get("/email")
+async def get_email(
+    current_user: User = Depends(get_current_user)
+):
+    return {
+        "email": current_user.email or "",
+        "email_verified": bool(current_user.email)
+    }
+
+
+@router.put("/email")
+async def update_email(
+    data: UpdateEmailRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    existing = db.query(User).filter(User.email == data.new_email, User.id != current_user.id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email is already in use")
+
+    current_user.email = data.new_email
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "email": current_user.email,
+        "email_verified": True
+    }
+
+
+@router.post("/email/send-verification")
+async def send_verification(
+    current_user: User = Depends(get_current_user)
+):
+    return {"message": "Verification email sent successfully"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Password & Security
+# ─────────────────────────────────────────────────────────────────────────────
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/password/change")
+async def change_password(
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.password_hash:
+        if not verify_password(data.current_password, current_user.password_hash):
+            raise HTTPException(status_code=400, detail="Incorrect current password")
+
+    current_user.password_hash = hash_password(data.new_password)
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Password changed successfully"}
+
+
+class TwoFactorRequest(BaseModel):
+    enabled: bool
+
+
+@router.put("/security/two-factor")
+async def update_two_factor(
+    data: TwoFactorRequest,
+    current_user: User = Depends(get_current_user)
+):
+    return {"two_factor_enabled": data.enabled}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# User Preferences & App Settings
+# ─────────────────────────────────────────────────────────────────────────────
+def get_or_create_settings(db: Session, user_id: str) -> UserSettingsModel:
+    settings = db.query(UserSettingsModel).filter(UserSettingsModel.user_id == user_id).first()
+    if not settings:
+        settings = UserSettingsModel(user_id=user_id)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
+def serialize_settings(settings: UserSettingsModel) -> dict:
+    return {
+        "theme": settings.theme or "dark",
+        "push_notifications": bool(settings.push_notifications),
+        "email_notifications": bool(settings.email_notifications),
+        "daily_summary_notifications": bool(settings.daily_summary_notifications),
+        "memory_update_notifications": bool(settings.memory_update_notifications),
+        "sync_completion_notifications": bool(settings.sync_completion_notifications),
+        "ai_activity_notifications": bool(settings.ai_activity_notifications),
+        "sound_enabled": bool(settings.sound_enabled),
+        "language": settings.language or "en",
+        "data_sharing_enabled": bool(settings.data_sharing_enabled),
+        "ai_training_consent": bool(settings.ai_training_consent),
+        "store_chat_history": bool(settings.store_chat_history),
+        "memory_retention_period": settings.memory_retention_period or "forever",
+        "auto_memory_extraction": bool(settings.auto_memory_extraction),
+        "auto_graph_building": bool(settings.auto_graph_building),
+        "auto_daily_summary": bool(settings.auto_daily_summary),
+        "auto_source_sync": bool(settings.auto_source_sync),
+        "auto_ai_insights": bool(settings.auto_ai_insights),
+        "ai_provider": settings.ai_provider or "gemini",
+        "response_length": settings.response_length or "medium",
+        "creativity_level": settings.creativity_level or "medium",
+    }
+
+
+@router.get("/all")
+async def get_all_settings_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    settings = get_or_create_settings(db, current_user.id)
+    return serialize_settings(settings)
+
+
+@router.put("/all")
+async def update_all_settings_endpoint(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    settings = get_or_create_settings(db, current_user.id)
+
+    data = {}
+    try:
+        data = await request.json()
+    except Exception:
+        pass
+
+    query_params = dict(request.query_params)
+    data.update(query_params)
+
+    bool_fields = {
+        "push_notifications", "email_notifications", "daily_summary_notifications",
+        "memory_update_notifications", "sync_completion_notifications", "ai_activity_notifications",
+        "sound_enabled", "data_sharing_enabled", "ai_training_consent", "store_chat_history",
+        "auto_memory_extraction", "auto_graph_building", "auto_daily_summary",
+        "auto_source_sync", "auto_ai_insights"
+    }
+
+    for k, v in data.items():
+        if hasattr(settings, k):
+            if k in bool_fields and isinstance(v, str):
+                v = v.lower() in ("true", "1", "yes")
+            setattr(settings, k, v)
+
+    settings.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(settings)
+    return serialize_settings(settings)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -25,8 +25,12 @@ export default function ProfileSettingsPage() {
       setUsername(p.username || "");
       setBio(p.bio || "");
       if (p.profile_picture_url) {
-        const backendBase = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, "") : "http://localhost:8000";
-        setImagePreview(`${backendBase}${p.profile_picture_url}`);
+        if (p.profile_picture_url.startsWith("http")) {
+          setImagePreview(p.profile_picture_url);
+        } else {
+          const backendBase = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, "") : "http://localhost:8000";
+          setImagePreview(`${backendBase}${p.profile_picture_url}`);
+        }
       }
     }
     fetchData();
@@ -48,10 +52,20 @@ export default function ProfileSettingsPage() {
     setLoading(true);
     try {
       if (imageFile) {
-        await uploadProfilePicture(imageFile);
+        const picRes = await uploadProfilePicture(imageFile);
+        if (picRes?.profile_picture_url) {
+          const backendBase = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, "") : "http://localhost:8000";
+          const fullPic = picRes.profile_picture_url.startsWith("http")
+            ? picRes.profile_picture_url
+            : `${backendBase}${picRes.profile_picture_url}`;
+          setImagePreview(fullPic);
+        }
       }
       const updated = await updateProfile({ display_name: displayName, username, bio });
       setProfile(updated);
+      setDisplayName(updated.display_name || "");
+      setUsername(updated.username || "");
+      setBio(updated.bio || "");
       alert("Profile saved successfully!");
     } catch (err) {
       console.error(err);

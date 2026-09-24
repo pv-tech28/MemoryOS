@@ -30,6 +30,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=True, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
     avatar_url = Column(String, nullable=True)
+    bio = Column(Text, nullable=True)
     password_hash = Column(String, nullable=True)
     plan = Column(String, default="free", nullable=False)
     memory_health = Column(Float, default=100.0, nullable=False)
@@ -45,6 +46,7 @@ class User(Base):
     google_credentials = relationship("GoogleCredential", back_populates="user", cascade="all, delete-orphan")
     uploads = relationship("Upload", back_populates="user", cascade="all, delete-orphan")
     conflicts = relationship("MemoryConflict", back_populates="user", cascade="all, delete-orphan")
+    settings = relationship("UserSettingsModel", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 
@@ -336,4 +338,41 @@ class Upload(Base):
 
     # Relationships
     user = relationship("User", back_populates="uploads")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# User Settings
+# ─────────────────────────────────────────────────────────────────────────────
+
+class UserSettingsModel(Base):
+    __tablename__ = "user_settings"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    theme = Column(String, default="dark", nullable=False)
+    push_notifications = Column(Boolean, default=True, nullable=False)
+    email_notifications = Column(Boolean, default=True, nullable=False)
+    daily_summary_notifications = Column(Boolean, default=True, nullable=False)
+    memory_update_notifications = Column(Boolean, default=False, nullable=False)
+    sync_completion_notifications = Column(Boolean, default=True, nullable=False)
+    ai_activity_notifications = Column(Boolean, default=False, nullable=False)
+    sound_enabled = Column(Boolean, default=True, nullable=False)
+    language = Column(String, default="en", nullable=False)
+    data_sharing_enabled = Column(Boolean, default=False, nullable=False)
+    ai_training_consent = Column(Boolean, default=False, nullable=False)
+    store_chat_history = Column(Boolean, default=True, nullable=False)
+    memory_retention_period = Column(String, default="forever", nullable=False)
+    auto_memory_extraction = Column(Boolean, default=True, nullable=False)
+    auto_graph_building = Column(Boolean, default=True, nullable=False)
+    auto_daily_summary = Column(Boolean, default=True, nullable=False)
+    auto_source_sync = Column(Boolean, default=False, nullable=False)
+    auto_ai_insights = Column(Boolean, default=True, nullable=False)
+    ai_provider = Column(String, default="gemini", nullable=False)
+    response_length = Column(String, default="medium", nullable=False)
+    creativity_level = Column(String, default="medium", nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="settings")
 

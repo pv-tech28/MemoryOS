@@ -119,12 +119,18 @@ def init_database():
     from app.models.db_models import (  # noqa: F401 — force model registration
         User, Document, DocumentChunk, Chat, ChatMessage,
         Memory, TimelineEventModel, GraphNodeModel, GraphEdgeModel,
-        GoogleCredential, Upload,
+        GoogleCredential, Upload, MemoryConflict, UserSettingsModel,
     )
     Base.metadata.create_all(bind=engine)
     try:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR;"))
+            conn.commit()
+    except Exception:
+        pass
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN bio TEXT;"))
             conn.commit()
     except Exception:
         pass
