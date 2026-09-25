@@ -14,6 +14,10 @@ import {
   Mail,
   HardDrive,
   Calendar,
+  Database,
+  ArrowRight,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { 
   getDocuments, 
@@ -41,29 +45,29 @@ const uploadZones = [
     icon: FileText,
     title: "Upload PDF / Docs",
     desc: "Drag & drop files here or click to browse",
-    color: "#4facfe",
+    color: "#60a5fa",
     isPdf: true,
   },
   {
     icon: Image,
     title: "Upload Images",
     desc: "Drag & drop images here or click to browse",
-    color: "#e84393",
-    isPdf: true, // Now link to upload page
+    color: "#f472b6",
+    isPdf: true,
   },
   {
     icon: Mic,
     title: "Upload Audio",
     desc: "Drag & drop audio files here or click to browse",
-    color: "#f0a500",
-    isPdf: true, // Now link to upload page
+    color: "#fbbf24",
+    isPdf: true,
   },
   {
     icon: FolderUp,
     title: "Upload Folder",
     desc: "Upload a folder from your device",
-    color: "#00d68f",
-    isPdf: true, // Now link to upload page
+    color: "#34d399",
+    isPdf: true,
   },
 ];
 
@@ -71,28 +75,28 @@ const sourceIntegrations = [
   {
     name: "Gmail",
     icon: Mail,
-    color: "#ea4335",
-    bg: "rgba(234,67,53,0.12)",
+    color: "#f87171",
+    desc: "Sync your email threads and attachments",
     syncFn: syncGmail,
   },
   {
     name: "Google Drive",
     icon: HardDrive,
-    color: "#4285f4",
-    bg: "rgba(66,133,244,0.12)",
+    color: "#60a5fa",
+    desc: "Index your documents and files",
     syncFn: syncDrive,
   },
   {
     name: "Google Calendar",
     icon: Calendar,
-    color: "#34a853",
-    bg: "rgba(52,168,83,0.12)",
+    color: "#34d399",
+    desc: "Import your events and meetings",
     syncFn: syncCalendar,
   },
 ];
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 24 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
@@ -252,74 +256,106 @@ export default function SourcesPage() {
 
   return (
     <AppLayout>
-      <div className="p-8 max-w-[1200px] mx-auto">
+      <div className="p-6 lg:p-8 max-w-[1200px] mx-auto">
         {/* Header */}
         <motion.div
           className="mb-8"
-          initial={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         >
-          <h1 className="text-2xl font-bold text-white">Sources</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{
+              background: 'rgba(34, 211, 238, 0.1)',
+              border: '1px solid rgba(34, 211, 238, 0.15)',
+            }}>
+              <Database size={18} style={{ color: '#22d3ee' }} />
+            </div>
+            <h1 className="text-2xl font-bold text-white">Sources</h1>
+          </div>
+          <p className="text-sm mt-1 ml-12" style={{ color: "var(--text-secondary)" }}>
             Connect and manage all your data sources
           </p>
         </motion.div>
 
         {/* Source Integrations */}
-        <div className="grid grid-cols-3 gap-4 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {sourceIntegrations.map((source, i) => {
             const Icon = source.icon;
             return (
               <motion.div
                 key={source.name}
-                className="card p-5"
+                className="p-5 rounded-2xl group"
+                style={{
+                  background: `linear-gradient(135deg, ${source.color}08, ${source.color}03)`,
+                  border: `1px solid ${source.color}15`,
+                  backdropFilter: 'blur(8px)',
+                }}
                 custom={i}
                 initial="hidden"
                 animate="visible"
                 variants={fadeUp}
+                whileHover={{ y: -2, borderColor: `${source.color}30` }}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center"
-                    style={{ background: source.bg }}
+                    className="w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+                    style={{
+                      background: `${source.color}12`,
+                      border: `1px solid ${source.color}20`,
+                    }}
                   >
                     <Icon size={22} style={{ color: source.color }} />
                   </div>
                   {!authStatusLoading && hasGoogle && (
-                    <span className="badge-connected">Connected</span>
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{
+                      background: 'rgba(52, 211, 153, 0.08)',
+                      border: '1px solid rgba(52, 211, 153, 0.15)',
+                      color: '#34d399',
+                    }}>
+                      <CheckCircle2 size={11} />
+                      Connected
+                    </span>
                   )}
                 </div>
 
-                <h3 className="text-sm font-semibold text-white">
+                <h3 className="text-sm font-semibold text-white mb-1">
                   {source.name}
                 </h3>
+                <p className="text-xs text-slate-500 mb-4">{source.desc}</p>
 
-                <button
+                <motion.button
                   onClick={() => handleSync(source.name, source.syncFn)}
                   disabled={syncing === source.name}
-                  className="w-full mt-4 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-[1.02]"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full py-2.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   style={
                     hasGoogle
                       ? {
-                          background: "var(--accent)",
+                          background: "linear-gradient(135deg, #7c5cfc, #6366f1)",
                           color: "#fff",
-                          boxShadow: "0 4px 16px rgba(108,92,231,0.35)",
+                          boxShadow: "0 4px 16px rgba(124,92,252,0.25)",
                         }
                       : {
-                          background: "var(--bg-elevated)",
-                          border: "1px solid var(--border)",
+                          background: "rgba(148, 163, 184, 0.04)",
+                          border: "1px solid rgba(148, 163, 184, 0.08)",
                           color: "var(--text-secondary)",
                         }
                   }
                 >
-                  {syncing === source.name 
-                    ? (hasGoogle ? "Syncing..." : "Connecting...")
-                    : hasGoogle 
-                      ? "Sync" 
-                      : "Connect Google"
-                  }
-                </button>
+                  {syncing === source.name ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      {hasGoogle ? "Syncing..." : "Connecting..."}
+                    </>
+                  ) : (
+                    <>
+                      {hasGoogle ? "Sync Now" : "Connect Google"}
+                      <ArrowRight size={13} />
+                    </>
+                  )}
+                </motion.button>
               </motion.div>
             );
           })}
@@ -327,10 +363,17 @@ export default function SourcesPage() {
 
         {syncMessage && (
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mb-5 p-3 rounded-lg"
-            style={{ background: "var(--bg-elevated)" }}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl"
+            style={{
+              background: syncMessage.includes("success") || syncMessage.includes("Successfully")
+                ? 'rgba(52, 211, 153, 0.06)'
+                : 'rgba(148, 163, 184, 0.04)',
+              border: syncMessage.includes("success") || syncMessage.includes("Successfully")
+                ? '1px solid rgba(52, 211, 153, 0.12)'
+                : '1px solid rgba(148, 163, 184, 0.06)',
+            }}
           >
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
               {syncMessage}
@@ -342,52 +385,51 @@ export default function SourcesPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.5 }}
-          className="mb-10"
+          transition={{ delay: 0.25, duration: 0.5 }}
+          className="mb-8"
         >
-          <h2 className="text-lg font-semibold text-white mb-4">
+          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+            <Upload size={16} className="text-violet-400" />
             Upload New Source
           </h2>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {uploadZones.map((zone, i) => {
               const ZoneIcon = zone.icon;
               const cardContent = (
                 <motion.div
-                  className="rounded-2xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer text-center transition-all hover:scale-[1.02] h-full"
+                  className="rounded-2xl p-5 flex flex-col items-center justify-center gap-3 cursor-pointer text-center h-full"
                   style={{
-                    border: "2px dashed var(--border)",
-                    background: "var(--bg-card)",
-                    minHeight: 160,
+                    border: "1px dashed rgba(148, 163, 184, 0.1)",
+                    background: "rgba(14, 14, 32, 0.3)",
+                    backdropFilter: "blur(8px)",
+                    minHeight: 150,
                   }}
-                  whileHover={zone.isPdf ? {
-                    borderColor: "rgba(108,92,231,0.4)",
-                    background: "var(--bg-card-hover)",
-                  } : {}}
+                  whileHover={{
+                    borderColor: `${zone.color}40`,
+                    background: "rgba(14, 14, 32, 0.5)",
+                    y: -2,
+                  }}
+                  transition={{ duration: 0.2 }}
                 >
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center"
+                    className="w-11 h-11 rounded-xl flex items-center justify-center"
                     style={{
-                      background: `${zone.color}15`,
+                      background: `${zone.color}10`,
+                      border: `1px solid ${zone.color}18`,
                     }}
                   >
-                    <ZoneIcon size={22} style={{ color: zone.color }} />
+                    <ZoneIcon size={20} style={{ color: zone.color }} />
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-white">
                       {zone.title}
                     </p>
-                    <p
-                      className="text-[10px] mt-1 leading-snug"
-                      style={{ color: "var(--text-muted)" }}
-                    >
+                    <p className="text-[10px] mt-1 leading-snug text-slate-600">
                       {zone.desc}
                     </p>
                   </div>
                   {zone.isPdf && (
-                    <Upload
-                      size={14}
-                      style={{ color: "var(--text-muted)", marginTop: 4 }}
-                    />
+                    <Upload size={13} className="text-slate-600 mt-1" />
                   )}
                 </motion.div>
               );
@@ -409,56 +451,86 @@ export default function SourcesPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.5 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
         >
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Uploaded Documents ({documents.length})
+          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+            <FileText size={16} className="text-blue-400" />
+            Uploaded Documents
+            <span className="text-xs px-2 py-0.5 rounded-full font-mono" style={{
+              background: 'rgba(148, 163, 184, 0.06)',
+              color: 'var(--text-muted)',
+            }}>{documents.length}</span>
           </h2>
           {loading ? (
-            <p style={{ color: "var(--text-secondary)" }}>Loading documents...</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {Array(3).fill(0).map((_, i) => (
+                <div key={i} className="h-28 rounded-2xl shimmer" style={{
+                  background: 'rgba(148, 163, 184, 0.03)',
+                  border: '1px solid rgba(148, 163, 184, 0.05)',
+                }} />
+              ))}
+            </div>
           ) : documents.length === 0 ? (
-            <p style={{ color: "var(--text-muted)" }}>No documents uploaded yet. Upload one above!</p>
+            <div className="py-12 text-center rounded-2xl" style={{
+              background: 'rgba(14, 14, 32, 0.3)',
+              border: '1px solid rgba(148, 163, 184, 0.05)',
+            }}>
+              <FileText className="mx-auto mb-3 text-slate-700" size={32} />
+              <p className="text-sm text-slate-500">No documents uploaded yet</p>
+              <p className="text-xs text-slate-600 mt-1">Upload a file above to get started</p>
+            </div>
           ) : (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {documents.map((doc, i) => (
                 <motion.div
                   key={doc.id}
-                  className="card p-5"
+                  className="p-4 rounded-2xl group"
+                  style={{
+                    background: "rgba(14, 14, 32, 0.4)",
+                    border: "1px solid rgba(148, 163, 184, 0.05)",
+                    backdropFilter: "blur(8px)",
+                  }}
                   custom={i}
                   initial="hidden"
                   animate="visible"
                   variants={fadeUp}
+                  whileHover={{ y: -2, borderColor: "rgba(96, 165, 250, 0.15)" }}
                 >
-                  <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start justify-between mb-3">
                     <div
-                      className="w-11 h-11 rounded-xl flex items-center justify-center"
-                      style={{ background: "rgba(79,172,254,0.12)" }}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center"
+                      style={{
+                        background: "rgba(96, 165, 250, 0.1)",
+                        border: "1px solid rgba(96, 165, 250, 0.15)",
+                      }}
                     >
-                      <FileText size={22} style={{ color: "#4facfe" }} />
+                      <FileText size={18} style={{ color: "#60a5fa" }} />
                     </div>
                     <button
                       onClick={() => handleDelete(doc.id)}
-                      className="p-1.5 rounded-lg hover:bg-red-500/10"
+                      className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10"
                     >
-                      <Trash2 size={16} style={{ color: "#e84393" }} />
+                      <Trash2 size={14} style={{ color: "#f87171" }} />
                     </button>
                   </div>
 
-                  <h3 className="text-sm font-semibold text-white truncate">
+                  <h3 className="text-sm font-semibold text-white truncate mb-2">
                     {doc.filename}
                   </h3>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span
-                      className="text-[10px] px-2 py-1 rounded-full"
-                      style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)" }}
-                    >
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{
+                      background: 'rgba(148, 163, 184, 0.05)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid rgba(148, 163, 184, 0.06)',
+                    }}>
                       {doc.page_count} pages
                     </span>
-                    <span
-                      className="text-[10px] px-2 py-1 rounded-full"
-                      style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)" }}
-                    >
+                    <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{
+                      background: 'rgba(148, 163, 184, 0.05)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid rgba(148, 163, 184, 0.06)',
+                    }}>
                       {doc.chunk_count} chunks
                     </span>
                   </div>
