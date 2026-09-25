@@ -31,6 +31,21 @@ load_dotenv()
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "your-secret-key-change-in-production")
+
+def get_google_oauth_credentials():
+    load_dotenv(override=True)
+    client_id = os.getenv("GOOGLE_CLIENT_ID", "")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
+    is_valid = bool(
+        client_id
+        and client_secret
+        and client_id.strip() != "your_google_client_id_here"
+        and client_secret.strip() != "your_google_client_secret_here"
+        and not client_id.strip().startswith("your_")
+    )
+    return client_id.strip(), client_secret.strip(), redirect_uri.strip(), is_valid
+
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback")
@@ -275,8 +290,12 @@ async def logout():
 @router.get("/google/login")
 async def google_login(request: Request, redirect_to: str = "http://localhost:3000/dashboard"):
     """Initiate Google OAuth2 flow using native Google credentials."""
-    if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET]):
-        raise HTTPException(status_code=500, detail="Google OAuth credentials not configured")
+    client_id, client_secret, redirect_uri, is_valid = get_google_oauth_credentials()
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env"
+        )
 
     # Sanitize redirect_to: only allow localhost (frontend) URLs for security
     frontend_origins = [
@@ -304,15 +323,15 @@ async def google_login(request: Request, redirect_to: str = "http://localhost:30
     flow = Flow.from_client_config(
         {
             "web": {
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [GOOGLE_REDIRECT_URI],
+                "redirect_uris": [redirect_uri],
             }
         },
         scopes=GOOGLE_SCOPES,
-        redirect_uri=GOOGLE_REDIRECT_URI,
+        redirect_uri=redirect_uri,
     )
 
     authorization_url, state = flow.authorization_url(
@@ -329,6 +348,12 @@ async def google_login(request: Request, redirect_to: str = "http://localhost:30
 @router.get("/google/callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
     """Handle Google OAuth2 callback, persist credentials, and redirect to frontend."""
+    client_id, client_secret, redirect_uri, is_valid = get_google_oauth_credentials()
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Google OAuth credentials not configured in backend/.env"
+        )
     try:
         code = request.query_params.get("code")
         state = request.query_params.get("state")
@@ -340,15 +365,15 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         flow = Flow.from_client_config(
             {
                 "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [GOOGLE_REDIRECT_URI],
+                    "redirect_uris": [redirect_uri],
                 }
             },
             scopes=GOOGLE_SCOPES,
-            redirect_uri=GOOGLE_REDIRECT_URI,
+            redirect_uri=redirect_uri,
         )
 
         flow.fetch_token(code=code)
@@ -363,7 +388,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
                 id_info = google.oauth2.id_token.verify_oauth2_token(
                     credentials.id_token,
                     google_requests.Request(),
-                    GOOGLE_CLIENT_ID,
+                    client_id,
                     clock_skew_in_seconds=10,
                 )
                 user_email = id_info.get("email")

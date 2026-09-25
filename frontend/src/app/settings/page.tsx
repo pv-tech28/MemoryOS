@@ -19,7 +19,8 @@ import {
   Cpu,
   Save,
   HardDrive,
-  FolderGit2
+  FolderGit2,
+  AlertTriangle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { getProfile, Profile } from "@/lib/api";
@@ -61,6 +62,7 @@ const initialSettingsSections: SettingsSection[] = [
   {
     title: "MemoryOS",
     items: [
+      { icon: AlertTriangle, label: "Memory Conflicts & Beliefs", desc: "Review contradiction alerts and resolve beliefs", color: "#eb5757", id: "conflicts", path: "/settings/conflicts" },
       { icon: Cpu, label: "Memory Preferences", desc: "Auto-extract, auto-graph, etc.", color: "#6c5ce7", id: "memory", path: "/settings/memory" },
       { icon: Save, label: "AI Settings", desc: "Provider, response length, creativity", color: "#00d68f", id: "ai", path: "/settings/ai" },
       { icon: HardDrive, label: "Data & Storage", desc: "See usage, export data", color: "#4facfe", id: "storage", path: "/settings/storage" },

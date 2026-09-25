@@ -103,6 +103,17 @@ export default function AskPage() {
         localStorage.removeItem("lastActiveChatId");
       }
       setChatHistoryLoaded(true);
+
+      // Read query params from URL (e.g. from Dashboard search or Files library)
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryParam = urlParams.get("q");
+      const docIdParam = urlParams.get("docId");
+      if (queryParam) {
+        setInputValue(queryParam);
+      }
+      if (docIdParam) {
+        setKnowledgeSource(docIdParam);
+      }
     }
   }, []);
 
@@ -227,10 +238,11 @@ export default function AskPage() {
     setIsLoading(true);
 
     try {
-      // Call backend API
+      // Call backend API with chat_id and selected document_id
       const response: ChatResponse = await chatWithDocument(
         question,
-        currentChat?.id === "temp-id" ? undefined : currentChat?.id
+        currentChat?.id === "temp-id" ? undefined : currentChat?.id,
+        knowledgeSource === "all" ? undefined : knowledgeSource
       );
 
       // Create AI message

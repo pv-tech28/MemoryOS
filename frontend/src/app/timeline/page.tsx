@@ -4,11 +4,27 @@ import AppLayout from "@/components/layout/AppLayout";
 import { motion } from "framer-motion";
 import { Clock, ArrowRight, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getTimeline, deleteTimelineEvent, TimelineResponse } from "@/lib/api";
 
 export default function TimelinePage() {
+  const router = useRouter();
   const [timelineData, setTimelineData] = useState<TimelineResponse | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const handleViewDetails = (event: any) => {
+    if (event.related_document) {
+      router.push(`/ask?docId=${event.related_document}`);
+    } else if (event.event_type === "chat") {
+      router.push("/ask");
+    } else if (event.event_type && (event.event_type.includes("sync") || event.event_type.includes("source"))) {
+      router.push("/sources");
+    } else if (event.event_type === "file_upload" || event.event_type === "pdf_upload") {
+      router.push("/files");
+    } else {
+      router.push("/memory-graph");
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -121,7 +137,8 @@ export default function TimelinePage() {
                       {event.description}
                     </p>
                     <button
-                      className="flex items-center gap-1 mt-3 text-[11px] font-medium"
+                      onClick={() => handleViewDetails(event)}
+                      className="flex items-center gap-1 mt-3 text-[11px] font-medium hover:underline transition-all"
                       style={{ color: "var(--accent)" }}
                     >
                       View details <ArrowRight size={11} />

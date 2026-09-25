@@ -15,12 +15,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app.models.db_models import (
-    User, Document, GraphNodeModel, GraphEdgeModel, Memory,
+    User, Document, DocumentChunk, GraphNodeModel, GraphEdgeModel, Memory,
     Chat, ChatMessage, TimelineEventModel, UserSettingsModel
 )
 from app.services.memory_graph_builder import get_graph_service
+from app.services.vector_store import delete_document as vs_delete
 from app.dependencies import get_current_user
 from app.routers.auth import hash_password, verify_password
+from app.repositories.auth_repo import AuthRepository
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -61,39 +63,44 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        user = current_user
+        db.add(user)
+
     if data.display_name is not None:
-        current_user.full_name = data.display_name
+        user.full_name = data.display_name
     elif data.full_name is not None:
-        current_user.full_name = data.full_name
+        user.full_name = data.full_name
 
     if data.username is not None:
         clean_username = data.username.strip()
         if clean_username:
-            existing = db.query(User).filter(User.username == clean_username, User.id != current_user.id).first()
+            existing = db.query(User).filter(User.username == clean_username, User.id != user.id).first()
             if existing:
                 raise HTTPException(status_code=400, detail="Username is already taken")
-            current_user.username = clean_username
+            user.username = clean_username
         else:
-            current_user.username = None
+            user.username = None
 
     if data.bio is not None:
-        current_user.bio = data.bio
+        user.bio = data.bio
 
-    current_user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.utcnow()
     db.commit()
-    db.refresh(current_user)
+    db.refresh(user)
 
-    avatar = current_user.avatar_url
+    avatar = user.avatar_url
     return {
-        "id": current_user.id,
-        "email": current_user.email or "",
-        "full_name": current_user.full_name or "",
-        "display_name": current_user.full_name or current_user.username or "",
-        "username": current_user.username or "",
-        "bio": current_user.bio or "",
+        "id": user.id,
+        "email": user.email or "",
+        "full_name": user.full_name or "",
+        "display_name": user.full_name or user.username or "",
+        "username": user.username or "",
+        "bio": user.bio or "",
         "avatar_url": avatar,
         "profile_picture_url": avatar,
-        "email_verified": bool(current_user.email),
+        "email_verified": bool(user.email),
     }
 
 
@@ -103,11 +110,16 @@ async def upload_profile_picture(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        user = current_user
+        db.add(user)
+
     upload_dir = Path("uploads")
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     file_ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
-    safe_filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:8]}{file_ext}"
+    safe_filename = f"avatar_{user.id}_{uuid.uuid4().hex[:8]}{file_ext}"
     target_path = upload_dir / safe_filename
 
     contents = await file.read()
@@ -115,10 +127,10 @@ async def upload_profile_picture(
         f.write(contents)
 
     url_path = f"/uploads/{safe_filename}"
-    current_user.avatar_url = url_path
-    current_user.updated_at = datetime.utcnow()
+    user.avatar_url = url_path
+    user.updated_at = datetime.utcnow()
     db.commit()
-    db.refresh(current_user)
+    db.refresh(user)
 
     return {
         "profile_picture_url": url_path,
@@ -149,17 +161,22 @@ async def update_email(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    existing = db.query(User).filter(User.email == data.new_email, User.id != current_user.id).first()
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        user = current_user
+        db.add(user)
+
+    existing = db.query(User).filter(User.email == data.new_email, User.id != user.id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email is already in use")
 
-    current_user.email = data.new_email
-    current_user.updated_at = datetime.utcnow()
+    user.email = data.new_email
+    user.updated_at = datetime.utcnow()
     db.commit()
-    db.refresh(current_user)
+    db.refresh(user)
 
     return {
-        "email": current_user.email,
+        "email": user.email,
         "email_verified": True
     }
 
@@ -185,12 +202,17 @@ async def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if current_user.password_hash:
-        if not verify_password(data.current_password, current_user.password_hash):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        user = current_user
+        db.add(user)
+
+    if user.password_hash:
+        if not verify_password(data.current_password, user.password_hash):
             raise HTTPException(status_code=400, detail="Incorrect current password")
 
-    current_user.password_hash = hash_password(data.new_password)
-    current_user.updated_at = datetime.utcnow()
+    user.password_hash = hash_password(data.new_password)
+    user.updated_at = datetime.utcnow()
     db.commit()
     return {"message": "Password changed successfully"}
 
@@ -305,22 +327,35 @@ async def get_connected_sources(
     drive_count = db.query(Document).filter(Document.user_id == user_id, Document.source == "drive").count()
     calendar_count = db.query(Document).filter(Document.user_id == user_id, Document.source == "calendar").count()
     
-    has_google_creds = len(getattr(current_user, "google_credentials", []) or []) > 0
-    
+    has_google_creds = AuthRepository.has_credentials(db, user_id)
+
+    def get_last_sync(count: int, source: str):
+        if not has_google_creds:
+            return None
+        last_doc = (
+            db.query(Document)
+            .filter(Document.user_id == user_id, Document.source == source)
+            .order_by(Document.uploaded_at.desc())
+            .first()
+        )
+        if last_doc and last_doc.uploaded_at:
+            return last_doc.uploaded_at.isoformat()
+        return datetime.now(UTC).isoformat() if count > 0 else None
+
     return {
         "gmail": {
             "connected": has_google_creds,
-            "last_sync": datetime.now(UTC).isoformat() if has_google_creds else None,
+            "last_sync": get_last_sync(gmail_count, "gmail"),
             "count": gmail_count
         },
         "drive": {
             "connected": has_google_creds,
-            "last_sync": datetime.now(UTC).isoformat() if has_google_creds else None,
+            "last_sync": get_last_sync(drive_count, "drive"),
             "count": drive_count
         },
         "calendar": {
             "connected": has_google_creds,
-            "last_sync": datetime.now(UTC).isoformat() if has_google_creds else None,
+            "last_sync": get_last_sync(calendar_count, "calendar"),
             "count": calendar_count
         }
     }
@@ -334,7 +369,18 @@ async def delete_documents(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    db.query(Document).filter(Document.user_id == current_user.id, Document.source == "upload").delete()
+    docs = db.query(Document).filter(Document.user_id == current_user.id, Document.source == "upload").all()
+    for d in docs:
+        if d.file_path and os.path.exists(d.file_path):
+            try:
+                os.remove(d.file_path)
+            except Exception:
+                pass
+        vs_delete(d.id)
+    doc_ids = [d.id for d in docs]
+    if doc_ids:
+        db.query(DocumentChunk).filter(DocumentChunk.document_id.in_(doc_ids)).delete(synchronize_session=False)
+        db.query(Document).filter(Document.id.in_(doc_ids)).delete(synchronize_session=False)
     db.commit()
     return {"message": "All uploaded documents deleted"}
 
@@ -379,7 +425,13 @@ async def delete_gmail_data(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    db.query(Document).filter(Document.user_id == current_user.id, Document.source == "gmail").delete()
+    docs = db.query(Document).filter(Document.user_id == current_user.id, Document.source == "gmail").all()
+    for d in docs:
+        vs_delete(d.id)
+    doc_ids = [d.id for d in docs]
+    if doc_ids:
+        db.query(DocumentChunk).filter(DocumentChunk.document_id.in_(doc_ids)).delete(synchronize_session=False)
+        db.query(Document).filter(Document.id.in_(doc_ids)).delete(synchronize_session=False)
     db.commit()
     return {"message": "Gmail data deleted"}
 
@@ -389,7 +441,13 @@ async def delete_drive_data(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    db.query(Document).filter(Document.user_id == current_user.id, Document.source == "drive").delete()
+    docs = db.query(Document).filter(Document.user_id == current_user.id, Document.source == "drive").all()
+    for d in docs:
+        vs_delete(d.id)
+    doc_ids = [d.id for d in docs]
+    if doc_ids:
+        db.query(DocumentChunk).filter(DocumentChunk.document_id.in_(doc_ids)).delete(synchronize_session=False)
+        db.query(Document).filter(Document.id.in_(doc_ids)).delete(synchronize_session=False)
     db.commit()
     return {"message": "Google Drive data deleted"}
 
@@ -399,7 +457,13 @@ async def delete_calendar_data(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    db.query(Document).filter(Document.user_id == current_user.id, Document.source == "calendar").delete()
+    docs = db.query(Document).filter(Document.user_id == current_user.id, Document.source == "calendar").all()
+    for d in docs:
+        vs_delete(d.id)
+    doc_ids = [d.id for d in docs]
+    if doc_ids:
+        db.query(DocumentChunk).filter(DocumentChunk.document_id.in_(doc_ids)).delete(synchronize_session=False)
+        db.query(Document).filter(Document.id.in_(doc_ids)).delete(synchronize_session=False)
     db.commit()
     return {"message": "Google Calendar data deleted"}
 
@@ -409,7 +473,18 @@ async def delete_all_data(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    db.query(Document).filter(Document.user_id == current_user.id).delete()
+    docs = db.query(Document).filter(Document.user_id == current_user.id).all()
+    for d in docs:
+        if d.file_path and os.path.exists(d.file_path):
+            try:
+                os.remove(d.file_path)
+            except Exception:
+                pass
+        vs_delete(d.id)
+    doc_ids = [d.id for d in docs]
+    if doc_ids:
+        db.query(DocumentChunk).filter(DocumentChunk.document_id.in_(doc_ids)).delete(synchronize_session=False)
+        db.query(Document).filter(Document.id.in_(doc_ids)).delete(synchronize_session=False)
     db.query(Memory).filter(Memory.user_id == current_user.id).delete()
     db.query(TimelineEventModel).filter(TimelineEventModel.user_id == current_user.id).delete()
     db.query(GraphEdgeModel).filter(GraphEdgeModel.source_id.in_(

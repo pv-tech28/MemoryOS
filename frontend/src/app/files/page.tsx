@@ -2,6 +2,8 @@
 
 import AppLayout from "@/components/layout/AppLayout";
 import { motion } from "framer-motion";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FileText,
   Mail,
@@ -11,11 +13,14 @@ import {
   Grid3X3,
   List,
   Trash2,
+  Upload,
+  MessageSquare,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getDocuments, deleteDocument, type DocumentInfo } from "@/lib/api";
 
 export default function FilesPage() {
+  const router = useRouter();
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -112,12 +117,14 @@ export default function FilesPage() {
             >
               <Grid3X3 size={16} />
             </button>
-            <button
-              className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: "var(--accent-subtle)", border: "1px solid rgba(108,92,231,0.3)", color: "var(--accent)" }}
+            <Link
+              href="/upload"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white transition-opacity hover:opacity-90 shadow-sm"
+              style={{ background: "var(--accent)" }}
             >
-              <List size={16} />
-            </button>
+              <Upload size={14} />
+              <span>Upload</span>
+            </Link>
           </div>
         </motion.div>
 
@@ -169,9 +176,21 @@ export default function FilesPage() {
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>{formatDate(doc.uploaded_at)}</span>
                   <div className="flex items-center justify-end gap-2">
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/ask?docId=${doc.id}&docName=${encodeURIComponent(doc.filename)}`);
+                      }}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-purple-500/10 transition-colors"
+                      style={{ background: "var(--bg-elevated)", color: "var(--accent)" }}
+                      title="Ask EVOLVE about this file"
+                    >
+                      <MessageSquare size={13} />
+                    </button>
+                    <button
                       onClick={() => handleDelete(doc.id)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-500/10"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-500/10 transition-colors"
                       style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)" }}
+                      title="Delete document"
                     >
                       <Trash2 size={13} />
                     </button>

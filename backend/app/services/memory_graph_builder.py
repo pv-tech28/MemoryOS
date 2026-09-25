@@ -710,7 +710,7 @@ def get_related_memories(entity_name: str, user_id: str = "demo-user-id"):
     memories = []
     try:
         from app.services.memory_store import get_relevant_memories
-        memories = [m for m in get_relevant_memories("", limit=100, min_importance=0.0)]
+        memories = [m for m in get_relevant_memories(entity_name, user_id=user_id, limit=20, min_importance=0.0)]
     except Exception as e:
         print(f"Error getting memories: {e}")
 

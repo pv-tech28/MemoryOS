@@ -27,6 +27,7 @@ from app.repositories.document_repo import DocumentRepository
 from app.repositories.auth_repo import AuthRepository
 from app.dependencies import get_current_user
 from app.models.db_models import User
+from app.services.timeline_service import add_timeline_event
 
 load_dotenv()
 
@@ -307,6 +308,13 @@ async def sync_gmail(
                 continue
         
         print(f"[Gmail Sync] Sync completed successfully! Synced {len(messages)} messages")
+        if len(messages) > 0:
+            add_timeline_event(
+                title="Gmail Synced",
+                description=f"Successfully indexed {len(messages)} emails into your memory vault.",
+                event_type="gmail_sync",
+                user_id=current_user.id
+            )
         return {"status": "success", "message": f"Synced {len(messages)} emails from Gmail"}
     except HTTPException:
         raise
@@ -472,6 +480,13 @@ async def sync_drive(
                 continue
         
         print(f"[Drive Sync] Sync completed! Processed {synced_count} files")
+        if synced_count > 0:
+            add_timeline_event(
+                title="Google Drive Synced",
+                description=f"Successfully indexed {synced_count} files into your memory vault.",
+                event_type="drive_sync",
+                user_id=current_user.id
+            )
         return {"status": "success", "message": f"Synced {synced_count} files from Drive"}
     except HTTPException:
         raise
@@ -520,9 +535,14 @@ async def sync_calendar(
                 end = event["end"].get("dateTime", event["end"].get("date"))
                 summary = event.get("summary", "No title")
                 description = event.get("description", "")
+                location = event.get("location", "")
+                attendees = event.get("attendees", [])
+                participants = [a.get("email", a.get("displayName", "")) for a in attendees] if attendees else []
                 print(f"[Calendar Sync]   Summary: {summary}")
                 print(f"[Calendar Sync]   Start: {start}")
                 print(f"[Calendar Sync]   End: {end}")
+                print(f"[Calendar Sync]   Location: {location}")
+                print(f"[Calendar Sync]   Participants: {participants}")
                 
                 # Process and add to vector store
                 content = f"Event: {summary}\nStart: {start}\nEnd: {end}\n\n{description}"
@@ -605,6 +625,13 @@ async def sync_calendar(
                 continue
         
         print(f"[Calendar Sync] Sync completed! Processed {len(events)} events")
+        if len(events) > 0:
+            add_timeline_event(
+                title="Google Calendar Synced",
+                description=f"Successfully indexed {len(events)} events into your timeline.",
+                event_type="calendar_sync",
+                user_id=current_user.id
+            )
         return {"status": "success", "message": f"Synced {len(events)} events from Calendar"}
     except HTTPException:
         raise

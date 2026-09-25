@@ -1,4 +1,4 @@
-﻿
+
 /**
  * EVOLVE AI — API Client
  * Functions for communicating with the FastAPI backend.
@@ -86,6 +86,7 @@ export interface ChatResponse {
   document_name: string;
   processing_time: number;
   related_entities?: RelatedEntity[];
+  graph_node_ids?: string[];
   related_graph_nodes?: any[];
   memory_ids?: string[];
   related_documents?: any[];
@@ -402,6 +403,55 @@ export async function deleteMemory(memoryId: string): Promise<void> {
     headers,
   });
   if (!res.ok) throw new Error("Failed to delete memory");
+}
+
+/* --- Memory Conflicts & Versioning --- */
+
+export interface MemoryConflict {
+  id: string;
+  user_id: string;
+  existing_memory_id: string;
+  existing_memory_text: string;
+  existing_memory_type: string;
+  incoming_memory_text: string;
+  incoming_memory_type: string;
+  conflict_type: string;
+  confidence: number;
+  explanation?: string | null;
+  resolution_status: string;
+  created_at: string;
+  resolved_at?: string | null;
+}
+
+export async function getMemoryConflicts(): Promise<MemoryConflict[]> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/memories/conflicts`, { headers });
+  if (!res.ok) throw new Error("Failed to fetch memory conflicts");
+  return res.json();
+}
+
+export async function resolveMemoryConflict(
+  conflictId: string,
+  action: "accept_new" | "keep_existing"
+): Promise<any> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/memories/conflicts/${conflictId}/resolve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify({ action }),
+  });
+  if (!res.ok) throw new Error("Failed to resolve memory conflict");
+  return res.json();
+}
+
+export async function getMemoryHistory(memoryId: string): Promise<{ lineage: any[] }> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/memories/history/${memoryId}`, { headers });
+  if (!res.ok) throw new Error("Failed to fetch memory history");
+  return res.json();
 }
 
 export interface GraphStats {

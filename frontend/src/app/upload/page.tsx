@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -13,6 +15,7 @@ import {
   Clock,
   HardDrive,
   FileUp,
+  ArrowRight,
 } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
@@ -26,6 +29,7 @@ import {
 type UploadStatus = "idle" | "uploading" | "processing" | "done" | "error";
 
 export default function UploadPage() {
+  const router = useRouter();
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -341,12 +345,22 @@ export default function UploadPage() {
             <h2 className="text-lg font-semibold text-white">
               Uploaded Documents
             </h2>
-            <span
-              className="text-xs"
-              style={{ color: "var(--text-muted)" }}
-            >
-              {documents.length} document{documents.length !== 1 ? "s" : ""}
-            </span>
+            <div className="flex items-center gap-3">
+              <span
+                className="text-xs"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {documents.length} document{documents.length !== 1 ? "s" : ""}
+              </span>
+              <Link
+                href="/files"
+                className="flex items-center gap-1 text-xs font-medium hover:underline"
+                style={{ color: "var(--accent)" }}
+              >
+                <span>View all in Files</span>
+                <ArrowRight size={12} />
+              </Link>
+            </div>
           </div>
 
           {isLoading ? (
@@ -437,14 +451,24 @@ export default function UploadPage() {
                   </span>
 
                   {/* Actions */}
-                  <button
-                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--bg-elevated)]"
-                    style={{ color: "var(--text-muted)" }}
-                    onClick={() => handleDelete(doc.id)}
-                    title="Delete document"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-purple-500/10"
+                      style={{ color: "var(--accent)", background: "var(--bg-elevated)" }}
+                      onClick={() => router.push(`/ask?docId=${doc.id}&docName=${encodeURIComponent(doc.filename)}`)}
+                      title="Ask EVOLVE about this file"
+                    >
+                      <MessageSquare size={14} />
+                    </button>
+                    <button
+                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-red-500/10"
+                      style={{ color: "var(--text-muted)", background: "var(--bg-elevated)" }}
+                      onClick={() => handleDelete(doc.id)}
+                      title="Delete document"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </motion.div>
               ))}
             </div>

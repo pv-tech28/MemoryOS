@@ -18,6 +18,7 @@ import {
   LogOut,
   User,
   CreditCard,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/sources", label: "Sources", icon: Database },
   { href: "/memory-graph", label: "Memory Graph", icon: Share2 },
   { href: "/timeline", label: "Timeline", icon: Clock },
+  { href: "/daily-summary", label: "Daily Summary", icon: Sparkles },
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

@@ -197,7 +197,46 @@ async def get_entity(
         connected_documents = []
         connected_emails = []
         connected_calendar_events = []
-        related_memories = []
+
+        node_doc_ids = set(node.source_doc_ids or [])
+        node_name_lower = node.name.lower()
+
+        for doc_key, doc in all_metadata.items():
+            doc_id = str(doc.get("id", ""))
+            doc_filename = str(doc.get("filename", "")).lower()
+            source = doc.get("source", "upload")
+
+            is_connected = (
+                doc_id in node_doc_ids
+                or f"doc_{doc_id}" in node_doc_ids
+                or (len(node_name_lower) > 3 and node_name_lower in doc_filename)
+            )
+
+            if is_connected:
+                item = {
+                    "id": doc_id,
+                    "filename": doc.get("filename", "Unknown"),
+                    "source": source,
+                    "uploaded_at": safe_format_date(doc.get("uploaded_at")),
+                    "page_count": doc.get("page_count", 1),
+                }
+                if source == "gmail":
+                    connected_emails.append(item)
+                elif source == "calendar":
+                    connected_calendar_events.append(item)
+                else:
+                    connected_documents.append(item)
+
+        from app.services.memory_store import get_relevant_memories
+        raw_memories = get_relevant_memories(node.name, user_id=user_id, limit=8, min_importance=0.0)
+        related_memories = raw_memories
+
+        total_sources = len(connected_documents) + len(connected_emails) + len(connected_calendar_events)
+        ai_explanation = (
+            f"'{node.name}' is categorized as {node.type}. "
+            f"It connects to {len(related_nodes)} related entities in your knowledge graph and "
+            f"is associated with {total_sources} source items and {len(related_memories)} long-term memories."
+        )
 
         return {
             **node.model_dump(),
@@ -206,7 +245,7 @@ async def get_entity(
             "connected_emails": connected_emails,
             "connected_calendar_events": connected_calendar_events,
             "related_memories": related_memories,
-            "ai_explanation": f"This entity is part of your memory graph and has {len(related_nodes)} connections to other entities."
+            "ai_explanation": ai_explanation,
         }
     except HTTPException:
         raise

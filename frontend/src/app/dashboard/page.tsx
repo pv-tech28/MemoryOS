@@ -437,14 +437,14 @@ export default function DashboardPage() {
   const handleSearch = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && searchQuery.trim()) {
       // Redirect to Ask EVOLVE with the query
-      router.push("/ask");
+      router.push(`/ask?q=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
   // Handle suggested query click
   const handleSuggestedQuery = (query: string) => {
     setSearchQuery(query);
-    router.push("/ask");
+    router.push(`/ask?q=${encodeURIComponent(query)}`);
   };
 
   // Memory stats array with dynamic values

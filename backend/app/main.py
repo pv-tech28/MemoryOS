@@ -67,8 +67,11 @@ app.include_router(dashboard.router)
 app.include_router(settings.router)
 
 # Serve uploaded profile pictures as static files
+import pathlib
 from fastapi.staticfiles import StaticFiles
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+_upload_dir = pathlib.Path(os.getenv("UPLOAD_DIR", "./uploads"))
+_upload_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_upload_dir)), name="uploads")
 
 
 @app.get("/api/health")
