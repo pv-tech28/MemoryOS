@@ -277,12 +277,13 @@ export async function getRelatedMemories(entityName: string): Promise<RelatedMem
 
 /* --- Authentication --- */
 
-export async function loginWithGoogle(redirectTo?: string): Promise<void> {
+export async function loginWithGoogle(redirectTo?: string, userId?: string): Promise<void> {
   const base = `${API_BASE}/auth/google/login`;
-  const url = redirectTo
-    ? `${base}?redirect_to=${encodeURIComponent(redirectTo)}`
-    : base;
-  window.location.href = url;
+  const params = new URLSearchParams();
+  if (redirectTo) params.set("redirect_to", redirectTo);
+  if (userId) params.set("user_id", userId);
+  const query = params.toString();
+  window.location.href = query ? `${base}?${query}` : base;
 }
 
 export async function checkAuthStatus(): Promise<{ authenticated: boolean; has_google: boolean; user_id: string }> {

@@ -105,7 +105,7 @@ class DocumentRepository:
     def count_by_source(db: Session, user_id: str = DEFAULT_USER_ID) -> Dict[str, int]:
         """Count documents grouped by source."""
         docs = db.query(Document).filter(_doc_user_filter(user_id)).all()
-        counts = {"document": 0, "gmail": 0, "calendar": 0}
+        counts = {"document": 0, "gmail": 0, "drive": 0, "calendar": 0}
         for doc in docs:
             src = doc.source or "document"
             if src == "upload":

@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
 
 export default function ConnectedSourcesPage() {
   const router = useRouter();
-  const { signInWithGoogle } = useAuth();
+  const { user, signInWithGoogle } = useAuth();
   const [sources, setSources] = useState<ConnectedSources | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -25,12 +25,14 @@ export default function ConnectedSourcesPage() {
 
   const handleSync = async (source: string) => {
     setLoading(prev => ({ ...prev, [source]: true }));
+    setError(null);
     try {
       await syncSource(source);
       const updated = await getConnectedSources();
       setSources(updated);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err?.message || `Failed to sync ${source}`);
     } finally {
       setLoading(prev => ({ ...prev, [source]: false }));
     }
@@ -41,7 +43,7 @@ export default function ConnectedSourcesPage() {
     setError(null);
     try {
       console.log("[Sources] Connecting Google sources via backend OAuth...");
-      await loginWithGoogle(window.location.href);
+      await loginWithGoogle(window.location.href, user?.id);
     } catch (err: any) {
       console.warn("[Sources] Backend connect failed, falling back to Supabase OAuth:", err);
       signInWithGoogle().catch((err2: any) => {
@@ -95,6 +97,12 @@ export default function ConnectedSourcesPage() {
             </p>
           </div>
         </motion.div>
+
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
 
         <div className="space-y-4">
           {sourceInfo.map((source, i) => {
@@ -152,11 +160,6 @@ export default function ConnectedSourcesPage() {
                         <X size={16} />
                       </button>
                     </>
-                  )}
-                  {error && (
-                    <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                      {error}
-                    </div>
                   )}
                   {!data?.connected && (
                     <button

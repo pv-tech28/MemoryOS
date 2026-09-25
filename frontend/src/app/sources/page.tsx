@@ -205,49 +205,25 @@ export default function SourcesPage() {
   };
 
   const handleSync = async (sourceName: string, syncFn: () => Promise<any>) => {
-    if (!user) {
+    if (!user || !hasGoogle) {
       setSyncing(sourceName);
       setSyncMessage("Redirecting to Google to connect sources...");
       try {
-        console.log("[Sources] !user -> connecting via Google OAuth...");
-        await loginWithGoogle(window.location.href);
+        console.log("[Sources] Connecting Google via OAuth...");
+        await loginWithGoogle(window.location.href, user?.id);
       } catch (err: any) {
-        console.warn("[Sources] Backend login failed, falling back to Supabase OAuth:", err);
-        try {
-          await signInWithGoogle(window.location.href);
-        } catch (err2: any) {
-          console.error("[Sources] Failed to connect:", err2);
-          setSyncing(null);
-          setSyncMessage(`Failed to connect Google: ${err2?.message ?? String(err2)}`);
-        }
-      }
-      return;
-    }
-
-    if (!hasGoogle) {
-      setSyncing(sourceName);
-      setSyncMessage("Redirecting to Google to connect sources...");
-      try {
-        console.log("[Sources] has_google=false; connecting via Google OAuth...");
-        await loginWithGoogle(window.location.href);
-      } catch (err: any) {
-        console.warn("[Sources] Backend connect failed, falling back to Supabase OAuth:", err);
-        try {
-          await signInWithGoogle(window.location.href);
-        } catch (err2: any) {
-          console.error("[Sources] Failed to connect:", err2);
-          setSyncing(null);
-          setSyncMessage(`Failed to connect Google: ${err2?.message ?? String(err2)}`);
-        }
+        console.error("[Sources] Failed to connect:", err);
+        setSyncing(null);
+        setSyncMessage(`Failed to connect Google: ${err?.message ?? String(err)}`);
       }
       return;
     }
     
     try {
       setSyncing(sourceName);
-      setSyncMessage(null);
+      setSyncMessage(`Syncing ${sourceName}... Please wait.`);
       const result = await syncFn();
-      setSyncMessage(result.message);
+      setSyncMessage(result.message || `Successfully synced ${sourceName}!`);
       
       // Refresh documents after sync
       const docs = await getDocuments();
@@ -258,14 +234,16 @@ export default function SourcesPage() {
       if (
         msg.includes("Not authenticated with Google") ||
         msg.includes("401") ||
-        msg.includes("authentication has expired")
+        msg.includes("authentication has expired") ||
+        msg.includes("reconnect") ||
+        msg.includes("expired")
       ) {
         setHasGoogle(false);
         setSyncMessage(
-          "Google credentials missing or expired — click Sync again to reconnect"
+          "Google credentials missing or expired — please click 'Connect Google' to reconnect."
         );
       } else {
-        setSyncMessage(`Failed to sync ${sourceName}`);
+        setSyncMessage(`Failed to sync ${sourceName}: ${msg}`);
       }
     } finally {
       setSyncing(null);

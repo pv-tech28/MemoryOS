@@ -9,6 +9,10 @@ import uuid
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
+import secrets
+import json
+import base64
+import urllib.parse
 
 import jwt
 from fastapi import APIRouter, Request, HTTPException, Depends, status
@@ -288,7 +292,11 @@ async def logout():
 
 
 @router.get("/google/login")
-async def google_login(request: Request, redirect_to: str = "http://localhost:3000/dashboard"):
+async def google_login(
+    request: Request,
+    redirect_to: str = "http://localhost:3000/dashboard",
+    user_id: Optional[str] = None,
+):
     """Initiate Google OAuth2 flow using native Google credentials."""
     client_id, client_secret, redirect_uri, is_valid = get_google_oauth_credentials()
     if not is_valid:
@@ -332,16 +340,29 @@ async def google_login(request: Request, redirect_to: str = "http://localhost:30
         },
         scopes=GOOGLE_SCOPES,
         redirect_uri=redirect_uri,
+        autogenerate_code_verifier=False,
     )
+
+    state_payload = {
+        "nonce": secrets.token_hex(16),
+        "redirect_to": normalized_redirect,
+    }
+    if user_id:
+        state_payload["user_id"] = user_id
+    state_str = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
 
     authorization_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
+        state=state_str,
     )
 
-    request.session["oauth_state"] = state
+    request.session["oauth_state"] = state_str
     request.session["oauth_redirect_to"] = normalized_redirect
+    if user_id:
+        request.session["oauth_user_id"] = user_id
+
     return RedirectResponse(url=authorization_url)
 
 
@@ -354,11 +375,26 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             status_code=400,
             detail="Google OAuth credentials not configured in backend/.env"
         )
+
+    redirect_target = "http://localhost:3000/dashboard"
+    target_user_id = None
+    state_param = request.query_params.get("state")
+    if state_param:
+        try:
+            decoded = json.loads(base64.urlsafe_b64decode(state_param.encode()).decode())
+            if isinstance(decoded, dict):
+                redirect_target = decoded.get("redirect_to") or redirect_target
+                target_user_id = decoded.get("user_id")
+        except Exception:
+            pass
+
+    if not target_user_id:
+        target_user_id = request.session.get("oauth_user_id")
+    if redirect_target == "http://localhost:3000/dashboard":
+        redirect_target = request.session.get("oauth_redirect_to") or redirect_target
+
     try:
         code = request.query_params.get("code")
-        state = request.query_params.get("state")
-        stored_state = request.session.get("oauth_state")
-
         if not code:
             raise HTTPException(status_code=400, detail="Missing authorization code")
 
@@ -374,6 +410,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             },
             scopes=GOOGLE_SCOPES,
             redirect_uri=redirect_uri,
+            autogenerate_code_verifier=False,
         )
 
         flow.fetch_token(code=code)
@@ -409,16 +446,21 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
                 user_name = info.get("name")
                 user_picture = info.get("picture")
 
-        if not user_email:
-            user_email = "google_user@evolve.ai"
+        user = None
+        if target_user_id:
+            user = db.query(User).filter(
+                (User.id == target_user_id) | (User.auth_id == target_user_id)
+            ).first()
 
-        user = db.query(User).filter(User.email == user_email).first()
+        if not user and user_email:
+            user = db.query(User).filter(User.email == user_email).first()
+
         if not user:
-            username = user_email.split("@")[0]
+            username = user_email.split("@")[0] if user_email else "google_user"
             user = User(
                 id=str(uuid.uuid4()),
                 auth_id=str(uuid.uuid4()),
-                email=user_email,
+                email=user_email or "google_user@evolve.ai",
                 full_name=user_name or username,
                 username=username,
                 avatar_url=user_picture,
@@ -437,15 +479,15 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(user)
 
-        # Save Google tokens in GoogleCredential table
+        # Save Google tokens in GoogleCredential table under user.id
         AuthRepository.save_credentials(
             db=db,
             user_id=user.id,
             token=credentials.token,
             refresh_token=credentials.refresh_token,
             token_uri=credentials.token_uri,
-            client_id=GOOGLE_CLIENT_ID,
-            client_secret=GOOGLE_CLIENT_SECRET,
+            client_id=client_id,
+            client_secret=client_secret,
             scopes=credentials.scopes,
             expiry=credentials.expiry,
         )
@@ -454,15 +496,14 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         if credentials.refresh_token:
             print("[Auth]   (refresh token received)")
         else:
-            print("[Auth]   WARNING: no refresh_token returned by Google. " +
-                  "Re-authorization may be needed after the access token expires. " +
-                  "If this keeps happening, choose 'Remove App Access' from your Google Account and try again.")
+            print("[Auth]   WARNING: no refresh_token returned by Google. Re-authorization may be needed after access token expires.")
 
         token = create_access_token(user)
         request.session.pop("oauth_state", None)
+        request.session.pop("oauth_redirect_to", None)
+        request.session.pop("oauth_user_id", None)
 
         # Redirect to the caller-specified page if present; fall back to dashboard
-        redirect_target = request.session.pop("oauth_redirect_to", None) or "http://localhost:3000/dashboard"
         sep = "&" if "?" in redirect_target else "?"
         response = RedirectResponse(url=f"{redirect_target}{sep}google_connected=1")
         response.set_cookie(
@@ -479,4 +520,8 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         print(f"[Auth] Google callback error: {e}")
         import traceback
         traceback.print_exc()
-        return RedirectResponse(url="http://localhost:3000/login?error=Google+login+failed")
+        err_msg = urllib.parse.quote(str(e))
+        if "/sources" in redirect_target or "/settings" in redirect_target:
+            sep = "&" if "?" in redirect_target else "?"
+            return RedirectResponse(url=f"{redirect_target}{sep}error={err_msg}")
+        return RedirectResponse(url=f"http://localhost:3000/login?error={err_msg}")

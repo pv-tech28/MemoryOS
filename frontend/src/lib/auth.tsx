@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import type { User } from '@supabase/supabase-js';
-import { saveGoogleTokens, checkAuthStatus, getCookie, getMe } from './api';
+import { saveGoogleTokens, checkAuthStatus, getCookie, getMe, loginWithGoogle } from './api';
 
 interface AuthContextType {
   user: User | null;
@@ -299,9 +299,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async (redirectTo?: string) => {
     const finalRedirectTo = redirectTo || `${window.location.origin}/dashboard`;
-    console.log("[Auth] Starting Google sign in via Supabase OAuth (PKCE)...");
-    console.log("[Auth] Redirect URL:", finalRedirectTo);
+    console.log("[Auth] Starting Google OAuth flow via backend loginWithGoogle...");
     try {
+      await loginWithGoogle(finalRedirectTo, user?.id);
+    } catch (err: any) {
+      console.warn("[Auth] Direct Google login failed, trying Supabase OAuth:", err);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -322,11 +324,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("[Auth] Google sign in error:", error);
         throw error;
       }
-    } catch (err: any) {
-      if (err.message === 'Failed to fetch' || err.name === 'AuthRetryableFetchError') {
-        throw new Error('AUTH_SERVER_UNREACHABLE');
-      }
-      throw err;
     }
   };
 

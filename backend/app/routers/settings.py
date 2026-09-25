@@ -540,9 +540,18 @@ async def sync_source(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # TODO: Call actual sync functions here (from sources.py)
     print(f"[SYNC] Syncing {source} for user {current_user.id}")
-    return {"message": f"Sync started for {source}"}
+    if source == "gmail":
+        from app.routers.sources import sync_gmail
+        return await sync_gmail(current_user=current_user, db=db)
+    elif source == "drive":
+        from app.routers.sources import sync_drive
+        return await sync_drive(current_user=current_user, db=db)
+    elif source == "calendar":
+        from app.routers.sources import sync_calendar
+        return await sync_calendar(current_user=current_user, db=db)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported source: {source}")
 
 
 @router.delete("/connected-sources/{source}")
@@ -551,6 +560,9 @@ async def disconnect_source(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # TODO: Implement actual disconnect logic
     print(f"[DISCONNECT] Disconnecting {source} for user {current_user.id}")
+    if source in ("gmail", "drive", "calendar", "google"):
+        AuthRepository.delete_credentials(db, current_user.id)
+        db.commit()
+        return {"message": f"{source.capitalize()} disconnected successfully"}
     return {"message": f"{source} disconnected"}
